@@ -6,531 +6,345 @@
 <title>Sama · Meditation Timer</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,200;0,300;0,400;1,200;1,300&family=Noto+Serif+JP:wght@200;300&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+/* ─────────────────────────────────────────
+   RESET & VARIABLES
+───────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-  :root {
-    --bg:        #08080f;
-    --bg2:       #0f0f1a;
-    --ring-bg:   rgba(255,255,255,0.05);
-    --ring:      #c8855a;
-    --ring-glow: rgba(200,133,90,0.18);
-    --text:      rgba(255,255,255,0.92);
-    --text-dim:  rgba(255,255,255,0.60);
-    --text-faint:rgba(255,255,255,0.35);
-    --accent:    #c8855a;
-    --r: 140;          /* SVG circle radius */
-    --stroke: 3.5;     /* ring stroke width */
-  }
+:root {
+  --bg:         #08080f;
+  --ring-bg:    rgba(255,255,255,0.05);
+  --ring:       #c8855a;
+  --accent:     #c8855a;
+  --text:       rgba(255,255,255,0.92);
+  --text-dim:   rgba(255,255,255,0.60);
+  --text-faint: rgba(255,255,255,0.35);
+}
 
-  html, body {
-    width:100%; height:100%; overflow:hidden;
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Cormorant Garamond', serif;
-    -webkit-font-smoothing: antialiased;
-    touch-action: manipulation;
-  }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: 'Cormorant Garamond', serif;
+  -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
+}
 
-  /* ── Screens ── */
-  .screen {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    transition: opacity 0.6s ease, transform 0.6s ease;
-    will-change: opacity, transform;
-  }
-  .screen.hidden {
-    opacity: 0; pointer-events: none; transform: scale(0.97);
-  }
+/* ─────────────────────────────────────────
+   UNLOCK OVERLAY
+───────────────────────────────────────── */
+#audioUnlock {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1.5rem; z-index: 999; transition: opacity 0.6s ease;
+}
+#audioUnlock.hidden { opacity: 0; pointer-events: none; }
 
-  /* ── Shared header ── */
-  .app-name {
-    position: fixed; top: 2.4rem; left: 50%; transform: translateX(-50%);
-    font-family: 'Noto Serif JP', serif;
-    font-weight: 200; font-size: 1.1rem;
-    letter-spacing: 0.45em; color: var(--text-dim);
-    z-index: 50;
-  }
+.unlock-title {
+  font-family: 'Noto Serif JP', serif;
+  font-weight: 200; font-size: 2rem;
+  letter-spacing: 0.3em; color: var(--text); opacity: 0.85;
+}
+.unlock-sub {
+  font-style: italic; font-size: 0.85rem;
+  letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase;
+}
+.unlock-btn {
+  margin-top: 1rem;
+  background: rgba(200,133,90,0.15);
+  border: 1.5px solid rgba(200,133,90,0.7); border-radius: 50px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.95rem; font-weight: 400;
+  letter-spacing: 0.35em; text-transform: uppercase;
+  color: var(--accent); padding: 0.95rem 4rem;
+  cursor: pointer; transition: all 0.3s ease;
+}
+.unlock-btn:hover, .unlock-btn:active {
+  background: rgba(200,133,90,0.25); border-color: rgba(200,133,90,1);
+}
+.unlock-hint {
+  font-style: italic; font-size: 0.72rem;
+  letter-spacing: 0.25em; color: var(--text-faint); margin-top: 0.2rem;
+}
 
-  /* ════════════════════════════
-     SETUP SCREEN
-  ════════════════════════════ */
-  #setupScreen {
-    gap: 0;
-    padding: 0 2rem;
-  }
+/* ─────────────────────────────────────────
+   SCREENS
+───────────────────────────────────────── */
+.screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.screen.hidden { opacity: 0; pointer-events: none; transform: scale(0.97); }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.screen:not(.hidden) { animation: fadeIn 0.5s ease forwards; }
 
-  .setup-title {
-    font-style: italic; font-weight: 300; font-size: 0.9rem;
-    letter-spacing: 0.2em; text-transform: uppercase;
-    color: var(--text-dim);
-    margin-bottom: 2.8rem;
-    margin-top: 5.5rem;
-  }
+.ambient {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(ellipse 60% 50% at 50% 55%,
+    rgba(200,133,90,0.04) 0%, transparent 70%);
+  animation: ambientPulse 8s ease-in-out infinite;
+}
+@keyframes ambientPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.05); }
+}
+.app-name {
+  position: fixed; top: 2.4rem; left: 50%; transform: translateX(-50%);
+  font-family: 'Noto Serif JP', serif; font-weight: 200; font-size: 1.1rem;
+  letter-spacing: 0.45em; color: var(--text-dim); z-index: 50;
+}
 
-  /* Duration grid */
-  .duration-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 0.7rem;
-    width: 100%; max-width: 380px;
-    margin-bottom: 2rem;
-  }
+/* ─────────────────────────────────────────
+   SETUP SCREEN
+───────────────────────────────────────── */
+#setupScreen { gap: 0; padding: 0 2rem; }
 
-  .dur-btn {
-    background: var(--ring-bg);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 10px;
-    color: rgba(255,255,255,0.75);
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 1.15rem; font-weight: 300;
-    letter-spacing: 0.04em;
-    padding: 0.9rem 0;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex; flex-direction: column;
-    align-items: center; gap: 0.15rem;
-  }
-  .dur-btn .unit {
-    font-size: 0.65rem; letter-spacing: 0.2em;
-    text-transform: uppercase; color: rgba(255,255,255,0.45);
-  }
-  .dur-btn:hover, .dur-btn.active {
-    background: rgba(200,133,90,0.12);
-    border-color: rgba(200,133,90,0.45);
-    color: var(--accent);
-  }
-  .dur-btn.active .unit { color: rgba(200,133,90,0.6); }
+.setup-title {
+  font-style: italic; font-weight: 300; font-size: 0.9rem;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-dim);
+  margin-top: 5.5rem; margin-bottom: 2.8rem;
+}
 
-  /* Options rows */
-  .options-row {
-    display: flex; align-items: center; justify-content: space-between;
-    width: 100%; max-width: 380px;
-    padding: 0.85rem 0;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-  }
-  .options-row:last-of-type { border-bottom: none; }
+.duration-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 0.7rem; width: 100%; max-width: 380px; margin-bottom: 2rem;
+}
+.dur-btn {
+  background: var(--ring-bg); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px; color: rgba(255,255,255,0.75);
+  font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; font-weight: 300;
+  padding: 0.9rem 0; cursor: pointer; transition: all 0.2s ease;
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+}
+.dur-btn .unit {
+  font-size: 0.65rem; letter-spacing: 0.2em;
+  text-transform: uppercase; color: rgba(255,255,255,0.45);
+}
+.dur-btn:hover, .dur-btn.active {
+  background: rgba(200,133,90,0.12); border-color: rgba(200,133,90,0.45);
+  color: var(--accent);
+}
+.dur-btn.active .unit { color: rgba(200,133,90,0.6); }
 
-  .opt-label {
-    font-size: 0.9rem; font-weight: 300;
-    letter-spacing: 0.06em; color: rgba(255,255,255,0.80);
-  }
-  .opt-sub {
-    font-size: 0.72rem; color: rgba(255,255,255,0.45);
-    letter-spacing: 0.04em; margin-top: 0.15rem;
-  }
+.options-row {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; max-width: 380px; padding: 0.85rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.options-row:last-of-type { border-bottom: none; }
+.opt-label {
+  font-size: 0.9rem; font-weight: 300;
+  letter-spacing: 0.06em; color: rgba(255,255,255,0.80);
+}
+.opt-sub {
+  font-size: 0.72rem; color: rgba(255,255,255,0.45);
+  letter-spacing: 0.04em; margin-top: 0.15rem;
+}
+.opt-right { display: flex; align-items: center; gap: 0.6rem; }
 
-  .opt-right {
-    display: flex; align-items: center; gap: 0.6rem;
-  }
+.toggle { position: relative; width: 36px; height: 20px; cursor: pointer; }
+.toggle input { display: none; }
+.toggle-track {
+  width: 36px; height: 20px; border-radius: 10px;
+  background: rgba(255,255,255,0.15); transition: background 0.25s; position: relative;
+}
+.toggle-thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: rgba(255,255,255,0.5); transition: transform 0.25s, background 0.25s;
+}
+.toggle input:checked ~ .toggle-track { background: rgba(200,133,90,0.4); }
+.toggle input:checked ~ .toggle-track .toggle-thumb {
+  transform: translateX(16px); background: var(--accent);
+}
 
-  /* Toggle switch */
-  .toggle {
-    position: relative; width: 36px; height: 20px; cursor: pointer;
-  }
-  .toggle input { display: none; }
-  .toggle-track {
-    width: 36px; height: 20px; border-radius: 10px;
-    background: rgba(255,255,255,0.15);
-    transition: background 0.25s;
-    position: relative;
-  }
-  .toggle-thumb {
-    position: absolute; top: 3px; left: 3px;
-    width: 14px; height: 14px; border-radius: 50%;
-    background: rgba(255,255,255,0.5);
-    transition: transform 0.25s, background 0.25s;
-  }
-  .toggle input:checked ~ .toggle-track { background: rgba(200,133,90,0.4); }
-  .toggle input:checked ~ .toggle-track .toggle-thumb {
-    transform: translateX(16px);
-    background: var(--accent);
-  }
+.stepper { display: flex; align-items: center; gap: 0.6rem; }
+.step-btn {
+  background: none; border: 1px solid rgba(255,255,255,0.25);
+  width: 26px; height: 26px; border-radius: 50%;
+  color: rgba(255,255,255,0.7); font-size: 1rem; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.2s, color 0.2s;
+}
+.step-btn:hover { border-color: var(--accent); color: var(--accent); }
+.step-val {
+  font-size: 0.85rem; color: rgba(255,255,255,0.80);
+  min-width: 2.5rem; text-align: center; letter-spacing: 0.04em;
+  pointer-events: none;
+}
 
-  /* Mini stepper for prep/interval */
-  .stepper {
-    display: flex; align-items: center; gap: 0.6rem;
-  }
-  .step-btn {
-    background: none; border: 1px solid rgba(255,255,255,0.25);
-    width: 26px; height: 26px; border-radius: 50%;
-    color: rgba(255,255,255,0.7); font-size: 1rem; line-height: 1;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: border-color 0.2s, color 0.2s;
-  }
-  .step-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .step-val {
-    font-size: 0.85rem; color: rgba(255,255,255,0.80);
-    min-width: 2.5rem; text-align: center;
-    letter-spacing: 0.04em;
-    border-radius: 4px;
-    cursor: default;
-    pointer-events: none;
-  }
-  .toggle:focus-visible, label.toggle:focus-visible {
-    outline: 2px solid rgba(200,133,90,0.7);
-    outline-offset: 3px;
-    border-radius: 10px;
-  }
+.bell-selector-wrap {
+  width: 100%; max-width: 380px;
+  padding: 0.85rem 0 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.bell-sel-label {
+  font-size: 0.9rem; font-weight: 300;
+  letter-spacing: 0.06em; color: rgba(255,255,255,0.80); margin-bottom: 0.75rem;
+}
+.bell-selector { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+.bell-btn {
+  background: var(--ring-bg); border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 20px; font-family: 'Cormorant Garamond', serif;
+  font-size: 0.82rem; letter-spacing: 0.06em; color: rgba(255,255,255,0.70);
+  padding: 0.42rem 0.9rem; cursor: pointer; transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.bell-btn:hover, .bell-btn.active {
+  border-color: rgba(200,133,90,0.45); color: rgba(200,133,90,0.9);
+}
 
-  /* Begin button */
-  .begin-btn {
-    margin-top: 2.4rem;
-    background: rgba(200,133,90,0.15);
-    border: 1.5px solid rgba(200,133,90,0.7);
-    border-radius: 50px;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 0.95rem; font-weight: 400;
-    letter-spacing: 0.35em; text-transform: uppercase;
-    color: #c8855a;
-    padding: 0.95rem 4rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    opacity: 1;
-  }
-  .begin-btn:hover {
-    background: rgba(200,133,90,0.25);
-    border-color: rgba(200,133,90,1);
-    color: #e8a870;
-  }
+.begin-btn {
+  margin-top: 2.4rem; background: rgba(200,133,90,0.15);
+  border: 1.5px solid rgba(200,133,90,0.7); border-radius: 50px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.95rem; font-weight: 400;
+  letter-spacing: 0.35em; text-transform: uppercase;
+  color: var(--accent); padding: 0.95rem 4rem;
+  cursor: pointer; transition: all 0.3s ease;
+}
+.begin-btn:hover {
+  background: rgba(200,133,90,0.25); border-color: rgba(200,133,90,1); color: #e8a870;
+}
 
+/* ─────────────────────────────────────────
+   SESSION SCREEN
+───────────────────────────────────────── */
+#sessionScreen { gap: 0; }
 
+.ring-wrapper {
+  position: relative; width: 320px; height: 320px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ring-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  transform: rotate(-90deg);
+}
+.ring-track          { fill: none; stroke: var(--ring-bg); stroke-width: 3.5; }
+.ring-progress       {
+  fill: none; stroke: var(--ring); stroke-width: 3.5; stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s linear;
+  filter: drop-shadow(0 0 6px rgba(200,133,90,0.5));
+}
+.ring-prep-track     { fill: none; stroke: rgba(255,255,255,0.04); stroke-width: 2; }
+.ring-prep-progress  {
+  fill: none; stroke: rgba(200,133,90,0.4); stroke-width: 2;
+  stroke-linecap: round; transition: stroke-dashoffset 0.6s linear;
+}
+.ring-interval-progress {
+  fill: none; stroke: rgba(200,133,90,0.55); stroke-width: 2;
+  stroke-linecap: round; stroke-dasharray: 1 999;
+  transition: stroke-dashoffset 0.6s linear;
+}
+.ring-center {
+  display: flex; flex-direction: column; align-items: center; gap: 0.3rem; z-index: 2;
+}
+.time-display {
+  font-size: 3.2rem; font-weight: 200; letter-spacing: 0.04em;
+  color: var(--text); line-height: 1; font-variant-numeric: tabular-nums;
+}
+.time-label {
+  font-size: 0.75rem; letter-spacing: 0.3em; text-transform: uppercase;
+  color: rgba(255,255,255,0.55); font-style: italic; margin-top: 0.4rem;
+}
+.phase-label {
+  font-size: 0.78rem; letter-spacing: 0.25em; text-transform: uppercase;
+  color: rgba(200,133,90,0.8); margin-top: 0.6rem; min-height: 1em;
+  transition: opacity 2s ease;
+}
 
-  /* ════════════════════════════
-     SESSION SCREEN
-  ════════════════════════════ */
-  #sessionScreen {
-    gap: 0;
-  }
+.session-controls {
+  margin-top: 3rem; display: flex; align-items: center; gap: 2.8rem;
+}
+.ctrl-btn {
+  background: none; border: none; font-family: 'Cormorant Garamond', serif;
+  font-size: 0.85rem; letter-spacing: 0.25em; text-transform: uppercase;
+  color: var(--text-dim); cursor: pointer; transition: color 0.2s; padding: 0.5rem 0;
+}
+.ctrl-btn:hover { color: var(--text); }
+.ctrl-btn.primary { color: var(--accent); }
+.ctrl-sep { width: 1px; height: 14px; background: rgba(255,255,255,0.1); }
 
-  .ring-wrapper {
-    position: relative;
-    width: 320px; height: 320px;
-    display: flex; align-items: center; justify-content: center;
-  }
+.session-meta {
+  position: fixed; bottom: 2.5rem;
+  font-size: 0.65rem; letter-spacing: 0.22em;
+  color: var(--text-faint); font-style: italic;
+}
+/* ─────────────────────────────────────────
+   COMPLETE SCREEN
+───────────────────────────────────────── */
+#completeScreen { gap: 0; text-align: center; }
 
-  .ring-svg {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    transform: rotate(-90deg);
-  }
+.complete-circle { width: 120px; height: 120px; margin-bottom: 2.5rem; }
+.complete-circle circle {
+  fill: none; stroke: rgba(200,133,90,0.25); stroke-width: 2;
+  filter: drop-shadow(0 0 8px rgba(200,133,90,0.3));
+}
+.complete-title {
+  font-weight: 200; font-size: 2rem; letter-spacing: 0.15em;
+  color: var(--text); margin-bottom: 0.5rem; font-style: italic;
+}
+.complete-duration {
+  font-size: 0.72rem; letter-spacing: 0.4em; text-transform: uppercase;
+  color: var(--text-faint); margin-bottom: 3rem;
+}
+.complete-actions { display: flex; gap: 1.2rem; align-items: center; flex-direction: column; }
+.complete-btn {
+  background: rgba(200,133,90,0.15);
+  border: 1.5px solid rgba(200,133,90,0.7); border-radius: 50px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.95rem; font-weight: 400;
+  letter-spacing: 0.35em; text-transform: uppercase;
+  color: var(--accent); padding: 0.95rem 4rem;
+  cursor: pointer; transition: all 0.3s ease;
+}
+.complete-btn:hover, .complete-btn:active {
+  background: rgba(200,133,90,0.25); border-color: rgba(200,133,90,1); color: #e8a870;
+}
+.complete-btn.secondary {
+  background: none; border-color: rgba(200,133,90,0.3);
+  color: var(--text-dim); padding: 0.95rem 4rem;
+}
+.complete-btn.secondary:hover {
+  background: rgba(200,133,90,0.08); border-color: rgba(200,133,90,0.5); color: var(--text);
+}
 
-  /* Background arc (full circle) */
-  .ring-track {
-    fill: none;
-    stroke: var(--ring-bg);
-    stroke-width: var(--stroke);
-  }
+/* ─────────────────────────────────────────
+   KEYBOARD FOCUS
+───────────────────────────────────────── */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid rgba(200,133,90,0.8); outline-offset: 3px; border-radius: 4px; }
+.bell-btn:focus-visible, .dur-btn:focus-visible { border-radius: 10px; }
+.begin-btn:focus-visible, .unlock-btn:focus-visible, .complete-btn:focus-visible { border-radius: 50px; }
+.step-btn:focus-visible { border-radius: 50%; }
+.toggle:focus-within, label.toggle:focus-visible {
+  outline: 2px solid rgba(200,133,90,0.8); outline-offset: 3px; border-radius: 10px;
+}
 
-  /* Progress arc */
-  .ring-progress {
-    fill: none;
-    stroke: var(--ring);
-    stroke-width: var(--stroke);
-    stroke-linecap: round;
-    transition: stroke-dashoffset 1s linear;
-    filter: drop-shadow(0 0 6px rgba(200,133,90,0.5));
-  }
-
-  /* Prep arc (inner smaller circle) */
-  .ring-prep-track {
-    fill: none;
-    stroke: rgba(255,255,255,0.04);
-    stroke-width: 2;
-  }
-  .ring-prep-progress {
-    fill: none;
-    stroke: rgba(200,133,90,0.4);
-    stroke-width: 2;
-    stroke-linecap: round;
-    transition: stroke-dashoffset 1s linear;
-  }
-
-  /* Interval dots */
-  .ring-interval-progress {
-    fill: none;
-    stroke: rgba(200,133,90,0.55);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-dasharray: 1 999;
-    transition: stroke-dashoffset 1s linear;
-  }
-
-  /* Center content */
-  .ring-center {
-    display: flex; flex-direction: column;
-    align-items: center; gap: 0.3rem;
-    z-index: 2;
-    transition: opacity 0.4s;
-  }
-
-  .time-display {
-    font-size: 3.2rem; font-weight: 200; letter-spacing: 0.04em;
-    color: var(--text); line-height: 1;
-    font-variant-numeric: tabular-nums;
-    transition: opacity 2.5s ease;
-  }
-
-  .time-label {
-    font-size: 0.75rem; letter-spacing: 0.3em;
-    text-transform: uppercase; color: rgba(255,255,255,0.55);
-    font-style: italic;
-    margin-top: 0.4rem;
-    transition: opacity 2.5s ease;
-  }
-
-  .phase-label {
-    font-size: 0.78rem; letter-spacing: 0.25em;
-    text-transform: uppercase; color: rgba(200,133,90,0.8);
-    margin-top: 0.6rem;
-    min-height: 1em;
-    transition: opacity 2s ease;
-  }
-
-  /* Peek mode (hide time) */
-  .ring-center.peek-hidden .time-display,
-  .ring-center.peek-hidden .time-label {
-    opacity: 0;
-  }
-
-  /* Controls */
-  .session-controls {
-    margin-top: 3rem;
-    display: flex; align-items: center; gap: 2.8rem;
-  }
-
-  .ctrl-btn {
-    background: none; border: none;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 0.85rem; letter-spacing: 0.25em;
-    text-transform: uppercase; color: var(--text-dim);
-    cursor: pointer; transition: color 0.2s, opacity 0.2s;
-    opacity: 1; padding: 0.5rem 0;
-  }
-  .ctrl-btn:hover { color: var(--text); }
-  .ctrl-btn.primary { color: var(--accent); opacity: 1; }
-  .ctrl-btn.primary:hover { opacity: 1; }
-
-  .ctrl-sep { width:1px; height:14px; background: rgba(255,255,255,0.1); }
-
-  /* Session info strip */
-  .session-meta {
-    position: fixed; bottom: 2.5rem;
-    font-size: 0.65rem; letter-spacing: 0.22em;
-    color: var(--text-faint); font-style: italic;
-  }
-
-  /* ════════════════════════════
-     COMPLETE SCREEN
-  ════════════════════════════ */
-  #completeScreen {
-    gap: 0;
-    text-align: center;
-  }
-
-  .complete-circle {
-    width: 120px; height: 120px; margin-bottom: 2.5rem;
-  }
-
-  .complete-circle circle {
-    fill: none;
-    stroke: rgba(200,133,90,0.25);
-    stroke-width: 2;
-    filter: drop-shadow(0 0 8px rgba(200,133,90,0.3));
-  }
-
-  .complete-title {
-    font-weight: 200; font-size: 2rem; letter-spacing: 0.15em;
-    color: var(--text); margin-bottom: 0.5rem;
-    font-style: italic;
-  }
-
-  .complete-duration {
-    font-size: 0.72rem; letter-spacing: 0.4em;
-    text-transform: uppercase; color: var(--text-faint);
-    margin-bottom: 3rem;
-  }
-
-  .complete-actions {
-    display: flex; gap: 2rem; align-items: center;
-  }
-
-  .complete-btn {
-    background: none; border: none;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 0.7rem; letter-spacing: 0.3em;
-    text-transform: uppercase;
-    cursor: pointer; transition: all 0.2s;
-    padding: 0.5rem 0;
-  }
-
-  .complete-btn.primary {
-    border: 1px solid rgba(200,133,90,0.3);
-    border-radius: 40px; padding: 0.7rem 2.5rem;
-    color: var(--accent); opacity: 0.85;
-  }
-  .complete-btn.primary:hover {
-    background: rgba(200,133,90,0.08);
-    border-color: rgba(200,133,90,0.6); opacity: 1;
-  }
-  .complete-btn.secondary { color: var(--text-dim); opacity: 0.6; }
-  .complete-btn.secondary:hover { opacity: 1; color: var(--text); }
-
-  /* ── Mobile lock notice ── */
-  .lock-notice {
-    display: none; /* hidden by default, shown via JS on mobile */
-    position: fixed;
-    bottom: 1.2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    color: rgba(255,255,255,0.2);
-    line-height: 1.6;
-    pointer-events: none;
-    white-space: nowrap;
-  }
-  .lock-notice span {
-    font-style: italic;
-    color: rgba(255,255,255,0.13);
-  }
-  .ambient {
-    position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background: radial-gradient(ellipse 60% 50% at 50% 55%,
-      rgba(200,133,90,0.04) 0%, transparent 70%);
-    animation: ambientPulse 8s ease-in-out infinite;
-  }
-  @keyframes ambientPulse {
-    0%,100% { opacity: 0.6; transform: scale(1); }
-    50%      { opacity: 1;   transform: scale(1.05); }
-  }
-
-  /* ── Fade-in on load ── */
-  @keyframes fadeIn {
-    from { opacity:0; transform: translateY(8px); }
-    to   { opacity:1; transform: translateY(0); }
-  }
-  .screen:not(.hidden) { animation: fadeIn 0.5s ease forwards; }
-
-  /* ── Responsiveness ── */
-  @media (max-height: 650px) {
-    .app-name { top: 1.2rem; font-size: 0.9rem; }
-    .setup-title { margin-top: 4rem; margin-bottom: 1.6rem; }
-    .ring-wrapper { width: 260px; height: 260px; }
-    .time-display { font-size: 2.6rem; }
-    .session-controls { margin-top: 2rem; }
-  }
-  @media (max-width: 400px) {
-    .duration-grid { grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
-    .dur-btn { font-size: 0.95rem; padding: 0.75rem 0; }
-    .ring-wrapper { width: 280px; height: 280px; }
-  }
-
-  /* ── Bell selector ── */
-  .bell-selector-wrap {
-    width: 100%; max-width: 380px;
-    margin-bottom: 0.2rem;
-    padding: 0.85rem 0 0.6rem;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-  }
-  .bell-sel-label {
-    font-size: 0.9rem; font-weight: 300;
-    letter-spacing: 0.06em; color: rgba(255,255,255,0.80);
-    margin-bottom: 0.75rem;
-  }
-  .bell-selector {
-    display: flex; gap: 0.45rem; flex-wrap: wrap;
-  }
-  .bell-btn {
-    background: var(--ring-bg);
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 20px;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 0.82rem; letter-spacing: 0.06em;
-    color: rgba(255,255,255,0.70);
-    padding: 0.42rem 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-  }
-  .bell-btn:hover {
-    border-color: rgba(200,133,90,0.45);
-    color: rgba(200,133,90,0.9);
-  }
-  .bell-btn.active {
-    border-color: rgba(200,133,90,0.45);
-    color: rgba(200,133,90,0.9);
-  }
-  /* ── Keyboard focus styles ── */
-  :focus { outline: none; }
-  :focus-visible {
-    outline: 2px solid rgba(200,133,90,0.8);
-    outline-offset: 3px;
-    border-radius: 4px;
-  }
-  .bell-btn:focus-visible,
-  .dur-btn:focus-visible { border-radius: 10px; }
-  .begin-btn:focus-visible,
-  .unlock-btn:focus-visible,
-  .complete-btn:focus-visible { border-radius: 50px; }
-  .step-btn:focus-visible { border-radius: 50%; }
-  .toggle:focus-within { outline: 2px solid rgba(200,133,90,0.8); outline-offset: 3px; border-radius: 10px; }
-  #audioUnlock {
-    position: fixed; inset: 0;
-    background: var(--bg);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    z-index: 999;
-    gap: 1.5rem;
-    transition: opacity 0.6s ease;
-  }
-  #audioUnlock.hidden {
-    opacity: 0; pointer-events: none;
-  }
-  .unlock-title {
-    font-family: 'Noto Serif JP', serif;
-    font-weight: 200; font-size: 2rem;
-    letter-spacing: 0.3em; color: var(--text);
-    opacity: 0.85;
-  }
-  .unlock-sub {
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic; font-size: 0.85rem;
-    letter-spacing: 0.2em; color: var(--text-dim);
-    text-transform: uppercase;
-  }
-  .unlock-btn {
-    margin-top: 1rem;
-    background: rgba(200,133,90,0.15);
-    border: 1.5px solid rgba(200,133,90,0.7);
-    border-radius: 50px;
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 0.95rem; font-weight: 400;
-    letter-spacing: 0.35em; text-transform: uppercase;
-    color: #c8855a;
-    padding: 0.95rem 4rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-  .unlock-btn:hover, .unlock-btn:active {
-    background: rgba(200,133,90,0.25);
-    border-color: rgba(200,133,90,1);
-  }
-  .unlock-hint {
-    font-family: 'Cormorant Garamond', serif;
-    font-style: italic;
-    font-size: 0.72rem;
-    letter-spacing: 0.25em;
-    color: var(--text-faint);
-    margin-top: 0.2rem;
-  }
+/* ─────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────── */
+@media (max-height: 650px) {
+  .app-name { top: 1.2rem; font-size: 0.9rem; }
+  .setup-title { margin-top: 4rem; margin-bottom: 1.6rem; }
+  .ring-wrapper { width: 260px; height: 260px; }
+  .time-display { font-size: 2.6rem; }
+  .session-controls { margin-top: 2rem; }
+}
+@media (max-width: 400px) {
+  .duration-grid { grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+  .dur-btn { font-size: 0.95rem; padding: 0.75rem 0; }
+  .ring-wrapper { width: 280px; height: 280px; }
+}
 </style>
 </head>
 <body>
 
-<!-- ══════════ AUDIO UNLOCK OVERLAY ══════════ -->
+<!-- ── AUDIO UNLOCK OVERLAY ── -->
 <div id="audioUnlock">
   <div class="unlock-title">Sama</div>
   <div class="unlock-sub">Meditation Timer</div>
@@ -541,12 +355,11 @@
 <div class="ambient"></div>
 <div class="app-name">Sama</div>
 
-<!-- ══════════ SETUP SCREEN ══════════ -->
+<!-- ── SETUP SCREEN ── -->
 <div class="screen" id="setupScreen">
 
   <p class="setup-title">Begin your session</p>
 
-  <!-- Duration picker -->
   <div class="duration-grid" id="durationGrid">
     <button class="dur-btn" data-min="5">5<span class="unit">min</span></button>
     <button class="dur-btn active" data-min="10">10<span class="unit">min</span></button>
@@ -560,7 +373,6 @@
     <button class="dur-btn" data-min="120">120<span class="unit">min</span></button>
   </div>
 
-  <!-- Prep time -->
   <div class="options-row">
     <div>
       <div class="opt-label">Preparation time</div>
@@ -572,14 +384,14 @@
         <span class="step-val" id="prepVal">15 sec</span>
         <button class="step-btn" id="prepUp" data-row-item="prep">+</button>
       </div>
-      <label class="toggle" tabindex="0" id="prepToggleLabel" data-row-item="prep" aria-label="Toggle preparation time">
+      <label class="toggle" tabindex="0" id="prepToggleLabel"
+             data-row-item="prep" aria-label="Toggle preparation time">
         <input type="checkbox" id="prepToggle" checked>
         <div class="toggle-track"><div class="toggle-thumb"></div></div>
       </label>
     </div>
   </div>
 
-  <!-- Interval bells -->
   <div class="options-row">
     <div>
       <div class="opt-label">Interval bells</div>
@@ -594,7 +406,6 @@
     </div>
   </div>
 
-  <!-- Bell selector -->
   <div class="bell-selector-wrap">
     <div class="bell-sel-label">Bell sound</div>
     <div class="bell-selector" id="bellSelector">
@@ -608,28 +419,24 @@
 
   <button class="begin-btn" id="beginBtn">Begin</button>
 
-
 </div>
 
-<!-- ══════════ SESSION SCREEN ══════════ -->
+<!-- ── SESSION SCREEN ── -->
 <div class="screen hidden" id="sessionScreen">
 
-  <div class="ring-wrapper" id="ringWrapper" role="timer" aria-label="Meditation timer progress">
-    <svg class="ring-svg" viewBox="0 0 320 320" id="ringSVG">
-      <!-- Outer ring (session) -->
-      <circle class="ring-track" cx="160" cy="160" r="140"/>
-      <circle class="ring-progress" cx="160" cy="160" r="140" id="ringProgress"/>
-      <!-- Inner ring (prep) -->
-      <circle class="ring-prep-track" cx="160" cy="160" r="118" id="prepTrack"/>
-      <circle class="ring-prep-progress" cx="160" cy="160" r="118" id="prepProgress"/>
-      <!-- Interval indicator (tiny innermost) -->
-      <circle class="ring-interval-progress" cx="160" cy="160" r="96" id="intProgress"/>
+  <div class="ring-wrapper" id="ringWrapper"
+       role="timer" aria-label="Meditation timer progress">
+    <svg class="ring-svg" viewBox="0 0 320 320">
+      <circle class="ring-track"              cx="160" cy="160" r="140"/>
+      <circle class="ring-progress"           cx="160" cy="160" r="140" id="ringProgress"/>
+      <circle class="ring-prep-track"         cx="160" cy="160" r="118" id="prepTrack"/>
+      <circle class="ring-prep-progress"      cx="160" cy="160" r="118" id="prepProgress"/>
+      <circle class="ring-interval-progress"  cx="160" cy="160" r="96"  id="intProgress"/>
     </svg>
-
     <div class="ring-center" id="ringCenter">
       <div class="time-display" id="timeDisplay">—</div>
-      <div class="time-label" id="timeLabel">remaining</div>
-      <div class="phase-label" id="phaseLabel"></div>
+      <div class="time-label"   id="timeLabel">remaining</div>
+      <div class="phase-label"  id="phaseLabel"></div>
     </div>
   </div>
 
@@ -637,22 +444,26 @@
     <button class="ctrl-btn" id="backBtn" aria-label="Back to setup">← Back</button>
     <div class="ctrl-sep"></div>
     <button class="ctrl-btn" id="stopBtn" aria-label="Stop session">
-      <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><rect x="1" y="1" width="10" height="10" rx="1.5"/></svg>Stop
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"
+           style="margin-right:0.3rem;vertical-align:middle">
+        <rect x="1" y="1" width="10" height="10" rx="1.5"/>
+      </svg>Stop
     </button>
     <div class="ctrl-sep"></div>
     <button class="ctrl-btn primary" id="pauseBtn" aria-label="Pause session">
-      <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><rect x="1.5" y="1" width="3" height="10" rx="1"/><rect x="7.5" y="1" width="3" height="10" rx="1"/></svg>Pause
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"
+           style="margin-right:0.3rem;vertical-align:middle">
+        <rect x="1.5" y="1" width="3" height="10" rx="1"/>
+        <rect x="7.5" y="1" width="3" height="10" rx="1"/>
+      </svg>Pause
     </button>
   </div>
 
   <div class="session-meta" id="sessionMeta"></div>
-  <div class="lock-notice" id="lockNotice">
-    Keep Auto-Lock off during your session<br>
-    <span>Settings → Display & Brightness → Auto-Lock → Never</span>
-  </div>
+
 </div>
 
-<!-- ══════════ COMPLETE SCREEN ══════════ -->
+<!-- ── COMPLETE SCREEN ── -->
 <div class="screen hidden" id="completeScreen">
   <svg class="complete-circle" viewBox="0 0 120 120">
     <circle cx="60" cy="60" r="55"/>
@@ -660,424 +471,404 @@
   <div class="complete-title">Well done.</div>
   <div class="complete-duration" id="completeDuration"></div>
   <div class="complete-actions">
-    <button class="complete-btn primary" id="againBtn">Meditate again</button>
+    <button class="complete-btn primary"   id="againBtn">Meditate again</button>
     <button class="complete-btn secondary" id="doneBtn">Done</button>
   </div>
 </div>
 
 <script>
-/* ═══════════════════════════
-   AUDIO — HTML5 Audio elements
-   Uses assets/ wav files —
-   works on all mobile browsers
-═══════════════════════════ */
-let selectedBell = 'tibetan';
-const BELL_NAMES = ['tibetan', 'temple', 'tingsha', 'crystal', 'rin'];
-const POOL_SIZE = 3;
+'use strict';
 
-// Pool of pre-loaded audio elements per bell
-const bellPool = {};
+/* ═══════════════════════════════════════════
+   1. AUDIO POOL
+   3 elements per bell so overlapping plays
+   never reuse a live element.
+═══════════════════════════════════════════ */
+const BELL_NAMES  = ['tibetan', 'temple', 'tingsha', 'crystal', 'rin'];
+const POOL_SIZE   = 3;
+let   selectedBell = 'tibetan';
+
+const bellPool    = {};
 const bellPoolIdx = {};
 BELL_NAMES.forEach(name => {
-  bellPool[name] = [];
-  bellPoolIdx[name] = 0;
-  for (let i = 0; i < POOL_SIZE; i++) {
+  bellPool[name]    = Array.from({ length: POOL_SIZE }, () => {
     const a = new Audio(`assets/${name}.wav`);
     a.preload = 'auto';
-    bellPool[name].push(a);
-  }
+    return a;
+  });
+  bellPoolIdx[name] = 0;
 });
 
-// Get next available element from pool (round-robin)
 function getPooledBell(name) {
-  const pool = bellPool[name];
   const idx = bellPoolIdx[name];
   bellPoolIdx[name] = (idx + 1) % POOL_SIZE;
-  return pool[idx];
+  return bellPool[name][idx];
 }
 
 let currentBellNode = null;
-let bellDebounce = null;
-let activeFade = null;
+let activeFadeTimer = null;
+let bellDebounce    = null;
 
-function fadeOutBell(audio, duration = 800) {
+function fadeOutBell(audio, ms = 800) {
   if (!audio) return;
-  if (activeFade) clearInterval(activeFade);
+  if (activeFadeTimer) clearInterval(activeFadeTimer);
   const startVol = audio.volume;
-  const steps = 20;
-  const stepTime = duration / steps;
-  let step = 0;
-  activeFade = setInterval(() => {
+  const steps    = 20;
+  let   step     = 0;
+  activeFadeTimer = setInterval(() => {
     step++;
-    // Stop fading if this element has been taken over by a new bell
-    if (audio !== currentBellNode) { clearInterval(activeFade); return; }
+    if (audio !== currentBellNode) { clearInterval(activeFadeTimer); return; }
     audio.volume = Math.max(0, startVol * (1 - step / steps));
     if (step >= steps) {
-      clearInterval(activeFade);
+      clearInterval(activeFadeTimer);
       audio.pause();
       audio.currentTime = 0;
     }
-  }, stepTime);
+  }, ms / steps);
 }
 
 function playBell(vol = 0.5, debounce = false) {
-  try {
-    clearTimeout(bellDebounce);
-
-    const fire = () => {
+  clearTimeout(bellDebounce);
+  const fire = () => {
+    try {
       const a = getPooledBell(selectedBell);
       if (!a) return;
-
-      // Cancel any active fade
-      if (activeFade) { clearInterval(activeFade); activeFade = null; }
-
-      // Fade out previous if it's a different element
-      if (currentBellNode && currentBellNode !== a) {
-        fadeOutBell(currentBellNode, 800);
-      }
-
+      if (activeFadeTimer) { clearInterval(activeFadeTimer); activeFadeTimer = null; }
+      if (currentBellNode && currentBellNode !== a) fadeOutBell(currentBellNode);
       a.currentTime = 0;
       a.volume = Math.min(1, Math.max(0, vol));
-      a.play().catch(e => console.warn('Bell play error:', e));
+      a.play().catch(() => {});
       currentBellNode = a;
-    };
-
-    if (debounce) {
-      bellDebounce = setTimeout(fire, 300);
-    } else {
-      fire();
-    }
-  } catch(e) { console.warn('Bell error:', e); }
+    } catch (e) { /* silent */ }
+  };
+  if (debounce) bellDebounce = setTimeout(fire, 300);
+  else          fire();
 }
 
-/* ═══════════════════════════
-   AUDIO UNLOCK SCREEN
-   iOS needs a user gesture to
-   allow audio — Enter does it
-═══════════════════════════ */
+/* ═══════════════════════════════════════════
+   2. AUDIO UNLOCK
+   • Enter tap: silent 1-sample Web Audio
+     buffer — satisfies gesture policy,
+     zero squeak.
+   • Begin tap: silently plays & pauses every
+     pool element so iOS allows timer-triggered
+     playback later.
+═══════════════════════════════════════════ */
 function handleUnlock() {
-  // Unlock every element in every pool during user gesture
-  // iOS requires .play() in a gesture before timers can trigger it
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch (e) { /* silent */ }
+
+  document.getElementById('audioUnlock').classList.add('hidden');
+  setTimeout(() => { document.getElementById('audioUnlock').style.display = 'none'; }, 700);
+  setTimeout(focusSetup, 150);
+}
+
+function unlockBellPool() {
   BELL_NAMES.forEach(name => {
     bellPool[name].forEach(a => {
       a.volume = 0;
       a.play().then(() => { a.pause(); a.currentTime = 0; a.volume = 1; }).catch(() => {});
     });
   });
-
-  const overlay = document.getElementById('audioUnlock');
-  overlay.classList.add('hidden');
-  setTimeout(() => overlay.style.display = 'none', 700);
-  setTimeout(() => focusSetup(), 150);
 }
 
-document.getElementById('unlockBtn').addEventListener('click', handleUnlock);
-document.getElementById('unlockBtn').addEventListener('touchend', e => {
-  e.preventDefault();
-  handleUnlock();
-});
+/* ═══════════════════════════════════════════
+   3. STATE
+═══════════════════════════════════════════ */
 const state = {
-  durationMin: 10,
-  prepSecs: 15,
-  prepEnabled: true,
-  intervalMin: 0,
-  showTime: true,  // always shown
-  phase: 'idle',   // idle | prep | session | done
-  totalSecs: 0,
-  secsLeft: 0,
-  paused: false,
-  timer: null,
+  durationMin:     10,
+  prepSecs:        15,
+  prepEnabled:     true,
+  intervalMin:     0,
+  phase:           'idle',   // idle | prep | session | done
+  totalSecs:       0,
+  secsLeft:        0,
+  paused:          false,
+  timer:           null,
   prepPhraseTimer: null,
-  sessionPhraseTimer: null,
-  sessionStarted: null,
-  pauseOffset: 0,    // total ms spent paused
-  pauseStart: null,  // timestamp when current pause began
+  sessPhraseTimer: null,
+  sessionStarted:  null,
+  pauseOffset:     0,    // total ms spent paused
+  pauseStart:      null, // timestamp when current pause began
 };
 
-/* ═══════════════════════════
-   UI HELPERS
-═══════════════════════════ */
+/* ═══════════════════════════════════════════
+   4. UI HELPERS
+═══════════════════════════════════════════ */
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => {
-    const isActive = s.id === id;
-    s.classList.toggle('hidden', !isActive);
-    // Disable all focusable elements in hidden screens so Tab can't reach them
+    const active = s.id === id;
+    s.classList.toggle('hidden', !active);
+    // Trap keyboard focus inside active screen
     s.querySelectorAll('button, input, [tabindex]').forEach(el => {
-      if (isActive) {
-        const saved = el.getAttribute('data-tabindex');
-        if (saved !== null) el.tabIndex = parseInt(saved);
-        else if (el.tabIndex < 0) {} // leave as-is
+      if (active) {
+        const saved = el.getAttribute('data-saved-ti');
+        if (saved !== null) el.tabIndex = parseInt(saved, 10);
       } else {
-        if (!el.hasAttribute('data-tabindex')) {
-          el.setAttribute('data-tabindex', el.tabIndex);
+        if (!el.hasAttribute('data-saved-ti')) {
+          el.setAttribute('data-saved-ti', el.tabIndex);
         }
         el.tabIndex = -1;
       }
     });
   });
-  document.getElementById(id).classList.remove('hidden');
+  if (id === 'sessionScreen') setTimeout(() => document.getElementById('pauseBtn').focus(), 150);
+  if (id === 'setupScreen')   focusSetup();
 }
 
 function fmtTime(secs) {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return m + ':' + String(s).padStart(2,'0');
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 }
 
-/* ═══════════════════════════
-   SETUP SCREEN LOGIC
-═══════════════════════════ */
-// Duration buttons
+function clearSessionTimers() {
+  if (state.timer)           clearInterval(state.timer);
+  if (state.prepPhraseTimer) clearInterval(state.prepPhraseTimer);
+  if (state.sessPhraseTimer) clearInterval(state.sessPhraseTimer);
+}
+
+function resetToSetup() {
+  clearSessionTimers();
+  state.phase  = 'idle';
+  state.paused = false;
+  setPauseBtn(false);
+  showScreen('setupScreen');
+}
+
+/* ═══════════════════════════════════════════
+   5. SETUP SCREEN
+═══════════════════════════════════════════ */
 document.getElementById('durationGrid').addEventListener('click', e => {
   const btn = e.target.closest('.dur-btn');
   if (!btn) return;
   document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  state.durationMin = parseInt(btn.dataset.min);
+  state.durationMin = parseInt(btn.dataset.min, 10);
 });
 
-// Prep stepper (values in seconds)
+// Prep stepper (seconds)
 const prepVals = [0, 15, 30, 60];
-let prepIdx = 1;
-document.getElementById('prepUp').addEventListener('click', () => {
-  prepIdx = (prepIdx + 1) % prepVals.length;
-  updatePrepVal();
-});
-document.getElementById('prepDown').addEventListener('click', () => {
-  prepIdx = (prepIdx - 1 + prepVals.length) % prepVals.length;
-  updatePrepVal();
-});
-function prepLabel(secs) {
-  if (secs === 0) return 'Off';
-  if (secs < 60)  return secs + ' sec';
-  return (secs / 60) + ' min';
+let   prepIdx  = 1;
+function prepLabel(s) {
+  if (s === 0) return 'Off';
+  return s < 60 ? `${s} sec` : `${s / 60} min`;
 }
 function updatePrepVal() {
   const v = prepVals[prepIdx];
   document.getElementById('prepVal').textContent = prepLabel(v);
-  state.prepSecs = v;
+  state.prepSecs    = v;
   state.prepEnabled = document.getElementById('prepToggle').checked && v > 0;
 }
-document.getElementById('prepToggle').addEventListener('change', e => {
-  state.prepEnabled = e.target.checked && prepVals[prepIdx] > 0;
+document.getElementById('prepUp').addEventListener('click', () => {
+  prepIdx = (prepIdx + 1) % prepVals.length; updatePrepVal();
+});
+document.getElementById('prepDown').addEventListener('click', () => {
+  prepIdx = (prepIdx - 1 + prepVals.length) % prepVals.length; updatePrepVal();
+});
+document.getElementById('prepToggle').addEventListener('change', () => {
+  state.prepEnabled = document.getElementById('prepToggle').checked && prepVals[prepIdx] > 0;
 });
 
-// Interval stepper
+// Interval stepper (minutes)
 const intVals = [0, 1, 5, 10, 15, 30];
-let intIdx = 0;
-document.getElementById('intUp').addEventListener('click', () => {
-  intIdx = (intIdx + 1) % intVals.length;
-  updateIntVal();
-});
-document.getElementById('intDown').addEventListener('click', () => {
-  intIdx = (intIdx - 1 + intVals.length) % intVals.length;
-  updateIntVal();
-});
+let   intIdx  = 0;
 function updateIntVal() {
   const v = intVals[intIdx];
-  document.getElementById('intVal').textContent = v === 0 ? 'Off' : v + ' min';
+  document.getElementById('intVal').textContent = v === 0 ? 'Off' : `${v} min`;
   state.intervalMin = v;
 }
+document.getElementById('intUp').addEventListener('click', () => {
+  intIdx = (intIdx + 1) % intVals.length; updateIntVal();
+});
+document.getElementById('intDown').addEventListener('click', () => {
+  intIdx = (intIdx - 1 + intVals.length) % intVals.length; updateIntVal();
+});
 
-
-
-/* ═══════════════════════════
-   RING GEOMETRY
-═══════════════════════════ */
-const OUTER_R = 140; // matches SVG
-const INNER_R = 118;
-const INT_R   = 96;
-
-function circumference(r) { return 2 * Math.PI * r; }
+/* ═══════════════════════════════════════════
+   6. RING GEOMETRY
+═══════════════════════════════════════════ */
+const OUTER_R = 140, INNER_R = 118, INT_R = 96;
 
 function setRingProgress(el, r, frac) {
-  const c = circumference(r);
-  el.style.strokeDasharray = c;
-  el.style.strokeDashoffset = c * (1 - frac);
+  const c = 2 * Math.PI * r;
+  el.style.strokeDasharray  = c;
+  el.style.strokeDashoffset = c * (1 - Math.max(0, Math.min(1, frac)));
 }
 
 function initRings() {
-  const rp = document.getElementById('ringProgress');
-  const pp = document.getElementById('prepProgress');
-  const ip = document.getElementById('intProgress');
-  const pt = document.getElementById('prepTrack');
-
-  setRingProgress(rp, OUTER_R, 1);
-  setRingProgress(pp, INNER_R, 0);
-  setRingProgress(ip, INT_R, 0);
-
-  // Show/hide inner rings
-  pt.style.display = 'none';
-  pp.style.display = 'none';
-  ip.style.display = 'none';
+  setRingProgress(document.getElementById('ringProgress'), OUTER_R, 1);
+  setRingProgress(document.getElementById('prepProgress'), INNER_R, 0);
+  setRingProgress(document.getElementById('intProgress'),  INT_R,   0);
+  ['prepTrack', 'prepProgress', 'intProgress'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
 }
 
-/* ═══════════════════════════
-   SESSION ENGINE
-═══════════════════════════ */
+/* ═══════════════════════════════════════════
+   7. SESSION ENGINE
+═══════════════════════════════════════════ */
+const PREP_PHRASES = ['breathe', 'arrive', 'rest here', 'settle in', 'soften', 'let go'];
+const SESS_PHRASES = [
+  'you are home',     'nothing to do',    'truth',             'being',
+  'shanti · peace',   'ananda · bliss',   'sukha · ease',      'sahaja · effortless',
+  'just this',        'you are home',     'shanti · peace',    'nothing to do',
+  'being',            'truth',
+];
+
+function getElapsedSecs() {
+  if (!state.sessionStarted) return 0;
+  const paused = state.pauseOffset +
+    (state.pauseStart ? Date.now() - state.pauseStart : 0);
+  return Math.floor((Date.now() - state.sessionStarted - paused) / 1000);
+}
+
+function fadePhrase(el, newText) {
+  el.style.opacity = '0';
+  setTimeout(() => { el.textContent = newText; el.style.opacity = '1'; }, 2000);
+}
+
+// Guard against double-fire on mobile (touchend + click)
+let beginGuard = false;
+
 function beginSession() {
+  if (beginGuard) return;
+  beginGuard = true;
+  setTimeout(() => { beginGuard = false; }, 500);
+
+  // Unlock pool on this user gesture — needed before timer-triggered bells on iOS
+  unlockBellPool();
+
   state.prepEnabled = document.getElementById('prepToggle').checked && prepVals[prepIdx] > 0;
-  state.prepSecs = prepVals[prepIdx];
+  state.prepSecs    = prepVals[prepIdx];
   state.intervalMin = intVals[intIdx];
 
   initRings();
   showScreen('sessionScreen');
-
-  const meta = document.getElementById('sessionMeta');
-  meta.textContent = state.durationMin + ' min session';
+  document.getElementById('sessionMeta').textContent = `${state.durationMin} min session`;
 
   if (state.prepEnabled && state.prepSecs > 0) {
     startPrep();
   } else {
-    playBell(0.75); // start bell — no prep, rings immediately
+    playBell(0.75);
     startMeditation();
   }
 }
 
-/* ── Prep phase ── */
+// ── Prep phase ──────────────────────────────
 function startPrep() {
-  state.phase = 'prep';
+  state.phase     = 'prep';
   state.totalSecs = state.prepSecs;
-  state.secsLeft = state.totalSecs;
-  state.paused = false;
+  state.secsLeft  = state.totalSecs;
+  state.paused    = false;
 
   const pp = document.getElementById('prepProgress');
   const pt = document.getElementById('prepTrack');
   pt.style.display = 'block';
   pp.style.display = 'block';
   setRingProgress(pp, INNER_R, 1);
-
   document.getElementById('timeLabel').textContent = '';
 
   // Rotating prep phrases
-  const prepPhrases = ['breathe', 'arrive', 'rest here', 'settle in', 'soften', 'let go'];
-  let prepPhraseIdx = 0;
+  let phraseIdx = 0;
   const phaseEl = document.getElementById('phaseLabel');
-  phaseEl.textContent = prepPhrases[0];
+  phaseEl.textContent = PREP_PHRASES[0];
 
   if (state.prepPhraseTimer) clearInterval(state.prepPhraseTimer);
   state.prepPhraseTimer = setInterval(() => {
     if (state.phase !== 'prep') { clearInterval(state.prepPhraseTimer); return; }
-    phaseEl.style.opacity = '0';
-    setTimeout(() => {
-      prepPhraseIdx = (prepPhraseIdx + 1) % prepPhrases.length;
-      phaseEl.textContent = prepPhrases[prepPhraseIdx];
-      phaseEl.style.opacity = '1';
-    }, 2000);
+    phraseIdx = (phraseIdx + 1) % PREP_PHRASES.length;
+    fadePhrase(phaseEl, PREP_PHRASES[phraseIdx]);
   }, 5000);
 
-  tickPrep();
-}
-
-function tickPrep() {
   updatePrepDisplay();
-  if (state.timer) clearTimeout(state.timer);
+  if (state.timer) clearInterval(state.timer);
   state.timer = setInterval(() => {
     if (state.paused) return;
     state.secsLeft--;
     updatePrepDisplay();
 
-    // Begin fading out 1 second before prep ends
+    // Fade center out on final second
     if (state.secsLeft === 1) {
       const rc = document.getElementById('ringCenter');
       rc.style.transition = 'opacity 1s ease';
-      rc.style.opacity = '0';
+      rc.style.opacity    = '0';
     }
 
     if (state.secsLeft <= 0) {
       clearInterval(state.timer);
-      document.getElementById('prepProgress').style.display = 'none';
-      document.getElementById('prepTrack').style.display = 'none';
-      playBell(0.75); // full bell — session now begins
+      pp.style.display = 'none';
+      pt.style.display = 'none';
+      playBell(0.75);
       startMeditation();
     }
   }, 1000);
 }
 
 function updatePrepDisplay() {
-  const frac = state.secsLeft / state.totalSecs;
-  setRingProgress(document.getElementById('prepProgress'), INNER_R, frac);
-  if (state.showTime) {
-    document.getElementById('timeDisplay').textContent = fmtTime(state.secsLeft);
-  } else {
-    document.getElementById('timeDisplay').textContent = '·';
-  }
+  setRingProgress(document.getElementById('prepProgress'), INNER_R,
+    state.secsLeft / state.totalSecs);
+  document.getElementById('timeDisplay').textContent = fmtTime(state.secsLeft);
 }
 
-/* ── True elapsed time, accounting for pauses ── */
-function getElapsedSecs() {
-  if (!state.sessionStarted) return 0;
-  const paused = state.pauseOffset + (state.pauseStart ? Date.now() - state.pauseStart : 0);
-  return Math.floor((Date.now() - state.sessionStarted - paused) / 1000);
-}
-
+// ── Session phase ────────────────────────────
 function startMeditation() {
-  state.phase = 'session';
-  state.totalSecs = state.durationMin * 60;
-  state.secsLeft = state.totalSecs;
-  state.paused = false;
+  state.phase          = 'session';
+  state.totalSecs      = state.durationMin * 60;
+  state.secsLeft       = state.totalSecs;
+  state.paused         = false;
   state.sessionStarted = Date.now();
-  state.pauseOffset = 0;
-  state.pauseStart = null;
+  state.pauseOffset    = 0;
+  state.pauseStart     = null;
 
-  // Interval setup — track as elapsed seconds, not secsLeft countdown
-  let nextIntervalElapsed = state.intervalMin > 0 ? state.intervalMin * 60 : Infinity;
+  // Interval setup — tracked as elapsed seconds (Date-based, not tick-based)
+  let nextIntervalElapsed = state.intervalMin > 0
+    ? state.intervalMin * 60 : Infinity;
   if (state.intervalMin > 0) {
     const ip = document.getElementById('intProgress');
     ip.style.display = 'block';
     setRingProgress(ip, INT_R, 1);
   }
 
-  // Fade everything in slowly — meditative transition
+  // Fade ring center in
   const ringCenter = document.getElementById('ringCenter');
-  const timeLabelEl = document.getElementById('timeLabel');
-  const timeDisplayEl = document.getElementById('timeDisplay');
-  const phaseEl2 = document.getElementById('phaseLabel');
-
-  ringCenter.style.opacity = '0';
   document.getElementById('phaseLabel').textContent = '';
-  timeLabelEl.textContent = 'remaining';
+  document.getElementById('timeLabel').textContent  = 'remaining';
+  ringCenter.style.opacity = '0';
   requestAnimationFrame(() => {
     ringCenter.style.transition = 'opacity 3s ease';
-    ringCenter.style.opacity = '1';
+    ringCenter.style.opacity    = '1';
   });
 
   // Rotating session phrases
-  const sessionPhrases = [
-    'you are home', 'nothing to do', 'truth', 'being',
-    'shanti · peace', 'ananda · bliss', 'sukha · ease',
-    'sahaja · effortless', 'just this', 'you are home',
-    'shanti · peace', 'nothing to do', 'being', 'truth'
-  ];
-  let sessionPhraseIdx = 0;
-
-  if (state.sessionPhraseTimer) clearInterval(state.sessionPhraseTimer);
-  state.sessionPhraseTimer = setInterval(() => {
+  let phraseIdx  = 0;
+  const phaseEl2 = document.getElementById('phaseLabel');
+  if (state.sessPhraseTimer) clearInterval(state.sessPhraseTimer);
+  state.sessPhraseTimer = setInterval(() => {
     if (state.phase !== 'session' || state.paused) return;
-    phaseEl2.style.opacity = '0';
-    setTimeout(() => {
-      sessionPhraseIdx = (sessionPhraseIdx + 1) % sessionPhrases.length;
-      phaseEl2.textContent = sessionPhrases[sessionPhraseIdx];
-      phaseEl2.style.opacity = '1';
-    }, 2000);
+    phraseIdx = (phraseIdx + 1) % SESS_PHRASES.length;
+    fadePhrase(phaseEl2, SESS_PHRASES[phraseIdx]);
   }, 15000);
 
   setRingProgress(document.getElementById('ringProgress'), OUTER_R, 1);
-
   updateSessionDisplay();
+
   if (state.timer) clearInterval(state.timer);
   state.timer = setInterval(() => {
     if (state.paused) return;
 
-    const elapsed = getElapsedSecs();
+    const elapsed  = getElapsedSecs();
     state.secsLeft = Math.max(0, state.totalSecs - elapsed);
 
-    // Interval bell — based on real elapsed time, not tick count
-    if (state.intervalMin > 0 && elapsed >= nextIntervalElapsed && nextIntervalElapsed < state.totalSecs) {
+    // Interval bell — Date-based so missed ticks never skip a bell
+    if (elapsed >= nextIntervalElapsed && nextIntervalElapsed < state.totalSecs) {
       playBell(0.45);
       nextIntervalElapsed += state.intervalMin * 60;
-      const ip = document.getElementById('intProgress');
-      setRingProgress(ip, INT_R, 1);
+      setRingProgress(document.getElementById('intProgress'), INT_R, 1);
     }
 
     updateSessionDisplay();
@@ -1086,293 +877,187 @@ function startMeditation() {
       clearInterval(state.timer);
       endSession();
     }
-  }, 500); // 500ms for better accuracy on iOS
+  }, 500); // 500ms tick for accuracy on iOS
 }
 
 function updateSessionDisplay() {
-  const frac = state.secsLeft / state.totalSecs;
-  setRingProgress(document.getElementById('ringProgress'), OUTER_R, frac);
-
-  const td = document.getElementById('timeDisplay');
-  const center = document.getElementById('ringCenter');
-
-  if (state.showTime) {
-    td.textContent = fmtTime(state.secsLeft);
-    center.classList.remove('peek-hidden');
-  } else {
-    td.textContent = '·';
-    document.getElementById('timeLabel').textContent = '';
-  }
+  setRingProgress(document.getElementById('ringProgress'), OUTER_R,
+    state.secsLeft / state.totalSecs);
+  document.getElementById('timeDisplay').textContent = fmtTime(state.secsLeft);
 }
 
 function endSession() {
   state.phase = 'done';
-  const isTingsha = selectedBell === 'tingsha';
-  // Strike 1 — moderate
-  playBell(0.5);
-  // Strike 2 — a bit fuller
+  const tingsha = selectedBell === 'tingsha';
+  // Three strikes building in volume (two for Tingsha — traditionally paired)
+  playBell(0.50);
   setTimeout(() => playBell(0.65), 2800);
-  // Strike 3 — full and final (skipped for Tingsha — two strikes only)
-  if (!isTingsha) {
-    setTimeout(() => playBell(0.85), 5600);
-  }
-  // Show complete screen after the last strike has rung out
-  setTimeout(() => showComplete(), isTingsha ? 5000 : 8000);
+  if (!tingsha) setTimeout(() => playBell(0.85), 5600);
+  setTimeout(() => showComplete(), tingsha ? 5000 : 8000);
 }
 
-/* ═══════════════════════════
-   COMPLETE SCREEN
-═══════════════════════════ */
 function showComplete() {
-  const mins = state.durationMin;
+  const m = state.durationMin;
   document.getElementById('completeDuration').textContent =
-    mins + ' minute' + (mins !== 1 ? 's' : '') + ' of mindfulness';
+    `${m} minute${m !== 1 ? 's' : ''} of mindfulness`;
   showScreen('completeScreen');
 }
 
-/* ═══════════════════════════
-   SESSION CONTROLS
-═══════════════════════════ */
-const ICON_PAUSE  = '<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><rect x="1.5" y="1" width="3" height="10" rx="1"/><rect x="7.5" y="1" width="3" height="10" rx="1"/></svg>';
-const ICON_RESUME = '<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><polygon points="2,1 11,6 2,11"/></svg>';
+/* ═══════════════════════════════════════════
+   8. SESSION CONTROLS
+═══════════════════════════════════════════ */
+const ICON_PAUSE  = `<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><rect x="1.5" y="1" width="3" height="10" rx="1"/><rect x="7.5" y="1" width="3" height="10" rx="1"/></svg>`;
+const ICON_RESUME = `<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><polygon points="2,1 11,6 2,11"/></svg>`;
 
 function setPauseBtn(paused) {
-  const btn = document.getElementById('pauseBtn');
-  btn.innerHTML = paused ? ICON_RESUME + 'Resume' : ICON_PAUSE + 'Pause';
+  document.getElementById('pauseBtn').innerHTML =
+    paused ? `${ICON_RESUME}Resume` : `${ICON_PAUSE}Pause`;
 }
 
 document.getElementById('pauseBtn').addEventListener('click', () => {
   state.paused = !state.paused;
   if (state.paused) {
     state.pauseStart = Date.now();
-  } else {
-    if (state.pauseStart) {
-      state.pauseOffset += Date.now() - state.pauseStart;
-      state.pauseStart = null;
-    }
+  } else if (state.pauseStart) {
+    state.pauseOffset += Date.now() - state.pauseStart;
+    state.pauseStart   = null;
   }
   setPauseBtn(state.paused);
-  const phaseEl = document.getElementById('phaseLabel');
-  if (state.paused) {
-    phaseEl.style.opacity = '0';
-    setTimeout(() => { phaseEl.textContent = 'paused'; phaseEl.style.opacity = '1'; }, 2000);
-  } else {
-    phaseEl.style.opacity = '0';
-    setTimeout(() => { phaseEl.textContent = ''; phaseEl.style.opacity = '1'; }, 2000);
-  }
+  fadePhrase(document.getElementById('phaseLabel'), state.paused ? 'paused' : '');
 });
 
-document.getElementById('backBtn').addEventListener('click', () => {
-  if (state.timer) clearInterval(state.timer);
-  if (state.prepPhraseTimer) clearInterval(state.prepPhraseTimer);
-  if (state.sessionPhraseTimer) clearInterval(state.sessionPhraseTimer);
-  state.phase = 'idle';
-  setPauseBtn(false);
-  showScreen('setupScreen');
-});
+document.getElementById('backBtn').addEventListener('click',  resetToSetup);
+document.getElementById('stopBtn').addEventListener('click',  resetToSetup);
+document.getElementById('againBtn').addEventListener('click', resetToSetup);
+document.getElementById('doneBtn').addEventListener('click',  resetToSetup);
 
-document.getElementById('stopBtn').addEventListener('click', () => {
-  if (state.timer) clearInterval(state.timer);
-  if (state.prepPhraseTimer) clearInterval(state.prepPhraseTimer);
-  if (state.sessionPhraseTimer) clearInterval(state.sessionPhraseTimer);
-  state.phase = 'idle';
-  setPauseBtn(false);
-  showScreen('setupScreen');
-});
-
-// ── Session controls: arrow key navigation ──
-const sessionCtrlIds = ['backBtn', 'stopBtn', 'pauseBtn'];
-sessionCtrlIds.forEach((id, i) => {
-  document.getElementById(id).addEventListener('keydown', e => {
-    const total = sessionCtrlIds.length;
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      document.getElementById(sessionCtrlIds[(i + 1) % total]).focus();
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      document.getElementById(sessionCtrlIds[(i - 1 + total) % total]).focus();
-    }
-  });
-});
-
-/* ═══════════════════════════
-   INIT
-═══════════════════════════ */
-document.getElementById('beginBtn').addEventListener('click', beginSession);
-document.getElementById('beginBtn').addEventListener('touchend', e => {
-  e.preventDefault();
-  beginSession();
-});
-
-
-// Bell selector — preview on tap
-document.getElementById('bellSelector').addEventListener('click', e => {
-  const btn = e.target.closest('.bell-btn');
-  if (!btn) return;
-  document.querySelectorAll('.bell-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  selectedBell = btn.dataset.bell;
-  playBell(0.5);
-});
-document.getElementById('againBtn').addEventListener('click', () => {
-  if (state.timer) clearInterval(state.timer);
-  setPauseBtn(false);
-  showScreen('setupScreen');
-});
-document.getElementById('doneBtn').addEventListener('click', () => {
-  if (state.timer) clearInterval(state.timer);
-  setPauseBtn(false);
-  showScreen('setupScreen');
-});
-
-
-
-/* ═══════════════════════════
-   KEYBOARD NAVIGATION
-═══════════════════════════ */
-
-// ── Duration grid: roving tabindex + arrow keys ──
+/* ═══════════════════════════════════════════
+   9. KEYBOARD NAVIGATION
+═══════════════════════════════════════════ */
+// Duration grid — roving tabindex, arrow key navigation
 const durBtns = Array.from(document.querySelectorAll('.dur-btn'));
+durBtns.forEach((b, i) => { b.tabIndex = i === 1 ? 0 : -1; }); // 10 min default
 
 function setDurFocus(idx) {
-  durBtns.forEach((b, i) => b.tabIndex = i === idx ? 0 : -1);
+  durBtns.forEach((b, i) => { b.tabIndex = i === idx ? 0 : -1; });
   durBtns[idx].focus();
 }
-
-// Init: 10 min (index 1) is focusable, rest are -1
-durBtns.forEach((b, i) => b.tabIndex = i === 1 ? 0 : -1);
-
 document.getElementById('durationGrid').addEventListener('keydown', e => {
   const cur = durBtns.findIndex(b => b === document.activeElement);
   if (cur === -1) return;
-  const cols = 5;
-  const total = durBtns.length;
-  let next = cur;
-  if (e.key === 'ArrowRight')     next = (cur + 1) % total;
-  else if (e.key === 'ArrowLeft') next = (cur - 1 + total) % total;
-  else if (e.key === 'ArrowDown') next = (cur + cols) % total;
-  else if (e.key === 'ArrowUp')   next = (cur - cols + total) % total;
-  else return;
+  const total = durBtns.length, cols = 5;
+  const next = {
+    ArrowRight: (cur + 1) % total,
+    ArrowLeft:  (cur - 1 + total) % total,
+    ArrowDown:  (cur + cols) % total,
+    ArrowUp:    (cur - cols + total) % total,
+  }[e.key];
+  if (next === undefined) return;
   e.preventDefault();
   setDurFocus(next);
   durBtns[next].click();
 });
 
-// ── Bell selector: arrow keys ──
+// Bell selector — roving tabindex, arrow keys, focus triggers preview
 const bellBtns = Array.from(document.querySelectorAll('.bell-btn'));
+bellBtns.forEach((b, i) => { b.tabIndex = i === 0 ? 0 : -1; });
 
 function setBellFocus(idx) {
-  bellBtns.forEach((b, i) => b.tabIndex = i === 0 ? 0 : -1);
-  bellBtns[idx].tabIndex = 0;
+  bellBtns.forEach((b, i) => { b.tabIndex = i === idx ? 0 : -1; });
   bellBtns[idx].focus();
 }
 
 let pageVisible = true;
-document.addEventListener('visibilitychange', () => {
-  pageVisible = !document.hidden;
-});
-window.addEventListener('blur', () => { pageVisible = false; });
-window.addEventListener('focus', () => {
-  // Short delay so focus event on bell buttons fires first, then we re-enable
-  setTimeout(() => { pageVisible = true; }, 600);
-});
+document.addEventListener('visibilitychange', () => { pageVisible = !document.hidden; });
+window.addEventListener('blur',  () => { pageVisible = false; });
+window.addEventListener('focus', () => { setTimeout(() => { pageVisible = true; }, 600); });
 
-bellBtns.forEach((b, i) => {
-  b.tabIndex = i === 0 ? 0 : -1;
+bellBtns.forEach(b => {
   b.addEventListener('focus', () => {
     selectedBell = b.dataset.bell;
     bellBtns.forEach(x => x.classList.remove('active'));
     b.classList.add('active');
-    // Don't play if returning from another tab/app
-    if (!pageVisible) return;
-    playBell(0.5, true);
+    if (pageVisible) playBell(0.5, true); // debounced
   });
+});
+
+document.getElementById('bellSelector').addEventListener('click', e => {
+  const btn = e.target.closest('.bell-btn');
+  if (btn) btn.focus(); // focus triggers preview via the focus handler above
 });
 
 document.getElementById('bellSelector').addEventListener('keydown', e => {
   const cur = bellBtns.findIndex(b => b === document.activeElement);
   if (cur === -1) return;
   const total = bellBtns.length;
-  let next = cur;
-  if (e.key === 'ArrowRight')     next = (cur + 1) % total;
-  else if (e.key === 'ArrowLeft') next = (cur - 1 + total) % total;
-  else return;
-  e.preventDefault();
-  setBellFocus(next);
-  bellBtns[next].click();
+  if (e.key === 'ArrowRight') { e.preventDefault(); setBellFocus((cur + 1) % total); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); setBellFocus((cur - 1 + total) % total); }
 });
 
-// ── Row navigation: Left/Right arrows move between −, + and toggle within a row ──
-const rowItems = {
+// Stepper rows — left/right navigates − / + / toggle; up/down changes value
+const rowDefs = {
   prep: ['prepDown', 'prepUp', 'prepToggleLabel'],
   int:  ['intDown',  'intUp'],
 };
-
-Object.entries(rowItems).forEach(([row, ids]) => {
+Object.entries(rowDefs).forEach(([row, ids]) => {
   ids.forEach((id, i) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('keydown', e => {
-      // Arrow keys navigate within the row
       if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        const next = ids[(i + 1) % ids.length];
-        document.getElementById(next).focus();
+        e.preventDefault(); document.getElementById(ids[(i + 1) % ids.length]).focus();
       } else if (e.key === 'ArrowLeft') {
+        e.preventDefault(); document.getElementById(ids[(i - 1 + ids.length) % ids.length]).focus();
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
-        const prev = ids[(i - 1 + ids.length) % ids.length];
-        document.getElementById(prev).focus();
-      }
-      // Up/Down still change the value from anywhere in the row
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        const upId   = row === 'prep' ? 'prepUp'   : 'intUp';
-        const downId = row === 'prep' ? 'prepDown' : 'intDown';
-        if (e.key === 'ArrowUp')   document.getElementById(upId).click();
-        if (e.key === 'ArrowDown') document.getElementById(downId).click();
+        const up   = row === 'prep' ? 'prepUp'   : 'intUp';
+        const down = row === 'prep' ? 'prepDown' : 'intDown';
+        document.getElementById(e.key === 'ArrowUp' ? up : down).click();
       }
     });
   });
 });
 
-// ── Toggle: Enter or Space activates it when label is focused ──
+// Toggle — Space or Enter
 document.getElementById('prepToggleLabel').addEventListener('keydown', e => {
   if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    document.getElementById('prepToggle').click();
+    e.preventDefault(); document.getElementById('prepToggle').click();
   }
 });
 
-// ── Auto-focus Pause when session screen loads ──
-const _origShowScreen = window.showScreen || showScreen;
-window.showScreen = function(id) {
-  _origShowScreen(id);
-  if (id === 'sessionScreen') {
-    setTimeout(() => document.getElementById('pauseBtn').focus(), 100);
-  }
-  if (id === 'setupScreen') focusSetup();
-};
+// Session controls — left/right cycles between Back / Stop / Pause
+const ctrlIds = ['backBtn', 'stopBtn', 'pauseBtn'];
+ctrlIds.forEach((id, i) => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    const total = ctrlIds.length;
+    if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById(ctrlIds[(i + 1) % total]).focus(); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); document.getElementById(ctrlIds[(i - 1 + total) % total]).focus(); }
+  });
+});
 
-// ── Auto-focus 5 min when setup screen appears ──
+/* ═══════════════════════════════════════════
+   10. EVENT WIRING
+═══════════════════════════════════════════ */
+document.getElementById('unlockBtn').addEventListener('click',    handleUnlock);
+document.getElementById('unlockBtn').addEventListener('touchend', e => { e.preventDefault(); handleUnlock(); });
+document.getElementById('unlockBtn').addEventListener('keydown',  e => { if (e.key === 'Enter') { e.preventDefault(); handleUnlock(); } });
+
+document.getElementById('beginBtn').addEventListener('click',    beginSession);
+document.getElementById('beginBtn').addEventListener('touchend', e => { e.preventDefault(); beginSession(); });
+
+/* ═══════════════════════════════════════════
+   11. FOCUS HELPERS
+═══════════════════════════════════════════ */
 function focusSetup() {
   setTimeout(() => {
-    durBtns.forEach((b, i) => b.tabIndex = i === 1 ? 0 : -1);
+    durBtns.forEach((b, i) => { b.tabIndex = i === 1 ? 0 : -1; });
     durBtns[1].focus();
   }, 100);
 }
 
-// Focus setup after unlock
-document.getElementById('unlockBtn').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('unlockBtn').click();
-});
-
-/* ═══════════════════════════
-   INIT
-═══════════════════════════ */
-// Show lock notice only on mobile
-if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-  document.getElementById('lockNotice').style.display = 'block';
-}
+/* ═══════════════════════════════════════════
+   12. INIT
+═══════════════════════════════════════════ */
 initRings();
 </script>
 </body>
