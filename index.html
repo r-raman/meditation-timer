@@ -227,7 +227,6 @@ html, body {
 .ring-track          { fill: none; stroke: var(--ring-bg); stroke-width: 3.5; }
 .ring-progress       {
   fill: none; stroke: var(--ring); stroke-width: 3.5; stroke-linecap: round;
-  transition: stroke-dashoffset 0.6s linear;
   filter: drop-shadow(0 0 6px rgba(200,133,90,0.5));
 }
 .ring-prep-track     { fill: none; stroke: rgba(255,255,255,0.04); stroke-width: 2; }
@@ -808,7 +807,7 @@ function startPrep() {
       pp.style.display = 'none';
       pt.style.display = 'none';
       playBell(0.75);
-      startMeditation();
+      setTimeout(() => startMeditation(), 1000);
     }
   }, 1000);
 }
@@ -861,6 +860,17 @@ function startMeditation() {
   setRingProgress(document.getElementById('ringProgress'), OUTER_R, 1);
   updateSessionDisplay();
 
+  // Drive the outer ring with requestAnimationFrame for buttery smooth animation
+  function animateRing() {
+    if (state.phase !== 'session') return;
+    if (!state.paused) {
+      const frac = Math.max(0, (state.totalSecs - getElapsedSecs()) / state.totalSecs);
+      setRingProgress(document.getElementById('ringProgress'), OUTER_R, frac);
+    }
+    requestAnimationFrame(animateRing);
+  }
+  requestAnimationFrame(animateRing);
+
   if (state.timer) clearInterval(state.timer);
   state.timer = setInterval(() => {
     if (state.paused) return;
@@ -885,8 +895,6 @@ function startMeditation() {
 }
 
 function updateSessionDisplay() {
-  setRingProgress(document.getElementById('ringProgress'), OUTER_R,
-    state.secsLeft / state.totalSecs);
   document.getElementById('timeDisplay').textContent = fmtTime(state.secsLeft);
 }
 
