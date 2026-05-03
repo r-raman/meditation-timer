@@ -900,12 +900,30 @@ function updateSessionDisplay() {
 
 function endSession() {
   state.phase = 'done';
-  const tingsha = selectedBell === 'tingsha';
-  // Three strikes building in volume (two for Tingsha — traditionally paired)
-  playBell(0.50);
-  setTimeout(() => playBell(0.65), 2800);
-  if (!tingsha) setTimeout(() => playBell(0.85), 5600);
-  setTimeout(() => showComplete(), tingsha ? 5000 : 8000);
+  const tingsha   = selectedBell === 'tingsha';
+  const strikes   = tingsha
+    ? [{ t: 0, v: 0.50 }, { t: 2800, v: 0.65 }]
+    : [{ t: 0, v: 0.50 }, { t: 2800, v: 0.65 }, { t: 5600, v: 0.85 }];
+  const endTime   = Date.now();
+  const completeAt = tingsha ? 5000 : 8000;
+  let   fired     = 0;
+
+  // Use a fast interval to check elapsed time — more reliable than setTimeout on iOS
+  const endTimer = setInterval(() => {
+    const elapsed = Date.now() - endTime;
+
+    // Fire any pending strikes whose time has arrived
+    while (fired < strikes.length && elapsed >= strikes[fired].t) {
+      playBell(strikes[fired].v);
+      fired++;
+    }
+
+    // Show complete screen after all bells have rung out
+    if (elapsed >= completeAt) {
+      clearInterval(endTimer);
+      showComplete();
+    }
+  }, 200);
 }
 
 function showComplete() {
