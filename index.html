@@ -644,30 +644,84 @@
 
 <script>
 /* ═══════════════════════════
-   AUDIO UNLOCK — must happen
-   synchronously on first tap
+   AUDIO — declared first so
+   unlock handler can access it
 ═══════════════════════════ */
-document.getElementById('unlockBtn').addEventListener('click', () => {
-  // iOS Safari: create context AND start audio in the SAME synchronous gesture
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let audioCtx = null;
+let selectedBell = 'tibetan';
+let audioUnlocked = false;
 
-  // Play a near-silent oscillator synchronously — this is what truly unlocks iOS
-  const osc  = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  gain.gain.value = 0.001;
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start(0);
-  osc.stop(audioCtx.currentTime + 0.1);
+function getAudio() {
+  if (!audioCtx) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e) {
+      console.warn('AudioContext creation failed:', e);
+    }
+  }
+  return audioCtx;
+}
 
-  // Resume if suspended (some browsers start suspended)
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+function ensureAudio() {
+  const ctx = getAudio();
+  if (ctx && ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
 
-  // Hide overlay
+function unlockAudio() {
+  if (audioUnlocked) return;
+  try {
+    // Create context if not already done
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    // Resume synchronously
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    // Play a real audible-but-silent tone — the ONLY thing iOS accepts as proof
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+    osc.frequency.value = 440;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.5);
+
+    audioUnlocked = true;
+  } catch(e) {
+    console.warn('Audio unlock failed:', e);
+  }
+}
+
+// Resume AudioContext when page becomes visible again (mobile background/foreground)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+});
+
+// Secondary unlock on any touch — catches cases where Enter button tap wasn't enough
+document.addEventListener('touchstart', () => {
+  if (!audioUnlocked) unlockAudio();
+}, { once: true, passive: true });
+
+/* ═══════════════════════════
+   AUDIO UNLOCK SCREEN
+═══════════════════════════ */
+function handleUnlock() {
+  unlockAudio();
   const overlay = document.getElementById('audioUnlock');
   overlay.classList.add('hidden');
   setTimeout(() => overlay.style.display = 'none', 700);
   setTimeout(() => focusSetup(), 150);
+}
+
+document.getElementById('unlockBtn').addEventListener('click', handleUnlock);
+document.getElementById('unlockBtn').addEventListener('touchend', e => {
+  e.preventDefault(); // prevent ghost click on iOS
+  handleUnlock();
 });
 const state = {
   durationMin: 10,
@@ -688,16 +742,17 @@ const state = {
 /* ═══════════════════════════
    AUDIO — 5 Bell Synthesizers
 ═══════════════════════════ */
-let audioCtx = null;
-let selectedBell = 'tibetan';
-
 function getAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e) { console.warn('AudioContext failed:', e); }
+  }
   return audioCtx;
 }
 function ensureAudio() {
   const ctx = getAudio();
-  if (ctx.state === 'suspended') ctx.resume();
+  if (ctx && ctx.state === 'suspended') ctx.resume();
   return ctx;
 }
 
@@ -864,7 +919,8 @@ function bellRin(ctx, now, vol = 0.5) {
 function playBell(vol = 0.5) {
   try {
     const ctx = ensureAudio();
-    const now = ctx.currentTime;
+    if (!ctx) return;
+    const now = ctx.currentTime + 0.05; // small offset for mobile scheduling reliability
     switch (selectedBell) {
       case 'tibetan': bellTibetan(ctx, now, vol); break;
       case 'temple':  bellTemple(ctx, now, vol);  break;
