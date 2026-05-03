@@ -668,17 +668,14 @@ function ensureAudio() {
   return ctx;
 }
 
-function unlockAudio() {
-  if (audioUnlocked) return;
+function unlockAudio(force = false) {
+  if (audioUnlocked && !force) return;
   try {
-    // Create context if not already done
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    // Resume synchronously
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    // Play a real audible-but-silent tone — the ONLY thing iOS accepts as proof
     const osc  = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     gain.gain.setValueAtTime(0.01, audioCtx.currentTime);
@@ -1056,8 +1053,8 @@ function initRings() {
    SESSION ENGINE
 ═══════════════════════════ */
 function beginSession() {
-  // Re-unlock on every Begin tap — iOS may have suspended AudioContext
-  unlockAudio();
+  // ALWAYS force re-unlock — iOS suspends AudioContext between taps
+  unlockAudio(true);
   const ctx = getAudio();
   if (ctx.state === 'suspended') ctx.resume();
 
@@ -1402,6 +1399,7 @@ bellBtns.forEach((b, i) => {
     selectedBell = b.dataset.bell;
     bellBtns.forEach(x => x.classList.remove('active'));
     b.classList.add('active');
+    unlockAudio(true); // re-unlock on every bell tap
     playBell(0.5);
   });
 });
