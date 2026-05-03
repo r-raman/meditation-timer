@@ -376,7 +376,26 @@
   .complete-btn.secondary { color: var(--text-dim); opacity: 0.6; }
   .complete-btn.secondary:hover { opacity: 1; color: var(--text); }
 
-  /* ── Ambient background pulse ── */
+  /* ── Mobile lock notice ── */
+  .lock-notice {
+    display: none; /* hidden by default, shown via JS on mobile */
+    position: fixed;
+    bottom: 1.2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.2);
+    line-height: 1.6;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .lock-notice span {
+    font-style: italic;
+    color: rgba(255,255,255,0.13);
+  }
   .ambient {
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background: radial-gradient(ellipse 60% 50% at 50% 55%,
@@ -627,6 +646,10 @@
   </div>
 
   <div class="session-meta" id="sessionMeta"></div>
+  <div class="lock-notice" id="lockNotice">
+    Keep Auto-Lock off during your session<br>
+    <span>Settings → Display & Brightness → Auto-Lock → Never</span>
+  </div>
 </div>
 
 <!-- ══════════ COMPLETE SCREEN ══════════ -->
@@ -767,6 +790,8 @@ const state = {
   prepPhraseTimer: null,
   sessionPhraseTimer: null,
   sessionStarted: null,
+  pauseOffset: 0,    // total ms spent paused
+  pauseStart: null,  // timestamp when current pause began
 };
 
 /* ═══════════════════════════
@@ -979,8 +1004,12 @@ function updatePrepDisplay() {
   }
 }
 
-/* ── Meditation phase ── */
-let nextIntervalAt = 0;
+/* ── True elapsed time, accounting for pauses ── */
+function getElapsedSecs() {
+  if (!state.sessionStarted) return 0;
+  const paused = state.pauseOffset + (state.pauseStart ? Date.now() - state.pauseStart : 0);
+  return Math.floor((Date.now() - state.sessionStarted - paused) / 1000);
+}
 
 function startMeditation() {
   state.phase = 'session';
@@ -988,10 +1017,12 @@ function startMeditation() {
   state.secsLeft = state.totalSecs;
   state.paused = false;
   state.sessionStarted = Date.now();
+  state.pauseOffset = 0;
+  state.pauseStart = null;
 
-  // Interval setup
+  // Interval setup — track as elapsed seconds, not secsLeft countdown
+  let nextIntervalElapsed = state.intervalMin > 0 ? state.intervalMin * 60 : Infinity;
   if (state.intervalMin > 0) {
-    nextIntervalAt = state.secsLeft - state.intervalMin * 60;
     const ip = document.getElementById('intProgress');
     ip.style.display = 'block';
     setRingProgress(ip, INT_R, 1);
@@ -1038,22 +1069,24 @@ function startMeditation() {
   state.timer = setInterval(() => {
     if (state.paused) return;
 
-    // Interval bell
-    if (state.intervalMin > 0 && state.secsLeft <= nextIntervalAt && nextIntervalAt > 0) {
+    const elapsed = getElapsedSecs();
+    state.secsLeft = Math.max(0, state.totalSecs - elapsed);
+
+    // Interval bell — based on real elapsed time, not tick count
+    if (state.intervalMin > 0 && elapsed >= nextIntervalElapsed && nextIntervalElapsed < state.totalSecs) {
       playBell(0.45);
-      nextIntervalAt -= state.intervalMin * 60;
+      nextIntervalElapsed += state.intervalMin * 60;
       const ip = document.getElementById('intProgress');
       setRingProgress(ip, INT_R, 1);
     }
 
     updateSessionDisplay();
-    state.secsLeft--;
 
     if (state.secsLeft <= 0) {
       clearInterval(state.timer);
       endSession();
     }
-  }, 1000);
+  }, 500); // 500ms for better accuracy on iOS
 }
 
 function updateSessionDisplay() {
@@ -1110,6 +1143,14 @@ function setPauseBtn(paused) {
 
 document.getElementById('pauseBtn').addEventListener('click', () => {
   state.paused = !state.paused;
+  if (state.paused) {
+    state.pauseStart = Date.now();
+  } else {
+    if (state.pauseStart) {
+      state.pauseOffset += Date.now() - state.pauseStart;
+      state.pauseStart = null;
+    }
+  }
   setPauseBtn(state.paused);
   const phaseEl = document.getElementById('phaseLabel');
   if (state.paused) {
@@ -1328,6 +1369,10 @@ document.getElementById('unlockBtn').addEventListener('keydown', e => {
 /* ═══════════════════════════
    INIT
 ═══════════════════════════ */
+// Show lock notice only on mobile
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  document.getElementById('lockNotice').style.display = 'block';
+}
 initRings();
 </script>
 </body>
