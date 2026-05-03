@@ -650,34 +650,51 @@
 ═══════════════════════════ */
 let selectedBell = 'tibetan';
 const BELL_NAMES = ['tibetan', 'temple', 'tingsha', 'crystal', 'rin'];
+const POOL_SIZE = 3;
 
-// Pre-load all bell audio elements
-const bellAudio = {};
+// Pool of pre-loaded audio elements per bell
+const bellPool = {};
+const bellPoolIdx = {};
 BELL_NAMES.forEach(name => {
-  const audio = new Audio();
-  audio.src = `assets/${name}.wav`;
-  audio.preload = 'auto';
-  bellAudio[name] = audio;
+  bellPool[name] = [];
+  bellPoolIdx[name] = 0;
+  for (let i = 0; i < POOL_SIZE; i++) {
+    const a = new Audio(`assets/${name}.wav`);
+    a.preload = 'auto';
+    bellPool[name].push(a);
+  }
 });
+
+// Get next available element from pool (round-robin)
+function getPooledBell(name) {
+  const pool = bellPool[name];
+  const idx = bellPoolIdx[name];
+  bellPoolIdx[name] = (idx + 1) % POOL_SIZE;
+  return pool[idx];
+}
 
 let currentBellNode = null;
 let bellDebounce = null;
+let activeFade = null;
 
-function fadeOutBell(audio, duration = 1000) {
+function fadeOutBell(audio, duration = 800) {
   if (!audio) return;
-  const start = audio.volume;
-  const steps = 30;
-  const interval = duration / steps;
+  if (activeFade) clearInterval(activeFade);
+  const startVol = audio.volume;
+  const steps = 20;
+  const stepTime = duration / steps;
   let step = 0;
-  const fade = setInterval(() => {
+  activeFade = setInterval(() => {
     step++;
-    audio.volume = Math.max(0, start * (1 - step / steps));
+    // Stop fading if this element has been taken over by a new bell
+    if (audio !== currentBellNode) { clearInterval(activeFade); return; }
+    audio.volume = Math.max(0, startVol * (1 - step / steps));
     if (step >= steps) {
-      clearInterval(fade);
+      clearInterval(activeFade);
       audio.pause();
       audio.currentTime = 0;
     }
-  }, interval);
+  }, stepTime);
 }
 
 function playBell(vol = 0.5, debounce = false) {
@@ -685,12 +702,18 @@ function playBell(vol = 0.5, debounce = false) {
     clearTimeout(bellDebounce);
 
     const fire = () => {
-      // Fade out previous bell instead of cutting it
-      if (currentBellNode) fadeOutBell(currentBellNode, 800);
+      const a = getPooledBell(selectedBell);
+      if (!a) return;
 
-      const src = bellAudio[selectedBell];
-      if (!src) return;
-      const a = src.cloneNode();
+      // Cancel any active fade
+      if (activeFade) { clearInterval(activeFade); activeFade = null; }
+
+      // Fade out previous if it's a different element
+      if (currentBellNode && currentBellNode !== a) {
+        fadeOutBell(currentBellNode, 800);
+      }
+
+      a.currentTime = 0;
       a.volume = Math.min(1, Math.max(0, vol));
       a.play().catch(e => console.warn('Bell play error:', e));
       currentBellNode = a;
@@ -710,13 +733,15 @@ function playBell(vol = 0.5, debounce = false) {
    allow audio — Enter does it
 ═══════════════════════════ */
 function handleUnlock() {
-  // Unlock all audio on user gesture — iOS Safari requirement
-  // Volume set to 0 so unlock is completely silent
+  // Unlock every element in every pool during user gesture
+  // iOS requires .play() in a gesture before timers can trigger it
   BELL_NAMES.forEach(name => {
-    const a = bellAudio[name].cloneNode();
-    a.volume = 0;
-    a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+    bellPool[name].forEach(a => {
+      a.volume = 0;
+      a.play().then(() => { a.pause(); a.currentTime = 0; a.volume = 1; }).catch(() => {});
+    });
   });
+
   const overlay = document.getElementById('audioUnlock');
   overlay.classList.add('hidden');
   setTimeout(() => overlay.style.display = 'none', 700);
