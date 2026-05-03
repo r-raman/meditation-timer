@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sama · Meditation Timer</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,200;0,300;0,400;1,200;1,300&family=Noto+Serif+JP:wght@200;300&display=swap" rel="stylesheet">
 <style>
@@ -163,6 +163,14 @@
     font-size: 0.85rem; color: rgba(255,255,255,0.80);
     min-width: 2.5rem; text-align: center;
     letter-spacing: 0.04em;
+    border-radius: 4px;
+    cursor: default;
+    pointer-events: none;
+  }
+  .toggle:focus-visible, label.toggle:focus-visible {
+    outline: 2px solid rgba(200,133,90,0.7);
+    outline-offset: 3px;
+    border-radius: 10px;
   }
 
   /* Begin button */
@@ -263,15 +271,16 @@
   }
 
   .time-label {
-    font-size: 0.62rem; letter-spacing: 0.35em;
-    text-transform: uppercase; color: var(--text-faint);
+    font-size: 0.75rem; letter-spacing: 0.3em;
+    text-transform: uppercase; color: rgba(255,255,255,0.55);
     font-style: italic;
+    margin-top: 0.4rem;
   }
 
   .phase-label {
-    font-size: 0.68rem; letter-spacing: 0.3em;
-    text-transform: uppercase; color: rgba(200,133,90,0.5);
-    margin-top: 0.2rem;
+    font-size: 0.78rem; letter-spacing: 0.25em;
+    text-transform: uppercase; color: rgba(200,133,90,0.8);
+    margin-top: 0.6rem;
     min-height: 1em;
   }
 
@@ -429,13 +438,83 @@
     color: rgba(200,133,90,0.9);
   }
   .bell-btn.active {
-    background: rgba(200,133,90,0.12);
-    border-color: rgba(200,133,90,0.6);
-    color: var(--accent);
+    border-color: rgba(200,133,90,0.45);
+    color: rgba(200,133,90,0.9);
+  }
+  /* ── Keyboard focus styles ── */
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 2px solid rgba(200,133,90,0.8);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  .bell-btn:focus-visible,
+  .dur-btn:focus-visible { border-radius: 10px; }
+  .begin-btn:focus-visible,
+  .unlock-btn:focus-visible,
+  .complete-btn:focus-visible { border-radius: 50px; }
+  .step-btn:focus-visible { border-radius: 50%; }
+  .toggle:focus-within { outline: 2px solid rgba(200,133,90,0.8); outline-offset: 3px; border-radius: 10px; }
+  #audioUnlock {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 999;
+    gap: 1.5rem;
+    transition: opacity 0.6s ease;
+  }
+  #audioUnlock.hidden {
+    opacity: 0; pointer-events: none;
+  }
+  .unlock-title {
+    font-family: 'Noto Serif JP', serif;
+    font-weight: 200; font-size: 2rem;
+    letter-spacing: 0.3em; color: var(--text);
+    opacity: 0.85;
+  }
+  .unlock-sub {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic; font-size: 0.85rem;
+    letter-spacing: 0.2em; color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .unlock-btn {
+    margin-top: 1rem;
+    background: rgba(200,133,90,0.15);
+    border: 1.5px solid rgba(200,133,90,0.7);
+    border-radius: 50px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.95rem; font-weight: 400;
+    letter-spacing: 0.35em; text-transform: uppercase;
+    color: #c8855a;
+    padding: 0.95rem 4rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .unlock-btn:hover, .unlock-btn:active {
+    background: rgba(200,133,90,0.25);
+    border-color: rgba(200,133,90,1);
+  }
+  .unlock-hint {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.72rem;
+    letter-spacing: 0.25em;
+    color: var(--text-faint);
+    margin-top: 0.2rem;
   }
 </style>
 </head>
 <body>
+
+<!-- ══════════ AUDIO UNLOCK OVERLAY ══════════ -->
+<div id="audioUnlock">
+  <div class="unlock-title">Sama</div>
+  <div class="unlock-sub">Meditation Timer</div>
+  <button class="unlock-btn" id="unlockBtn" autofocus>Enter</button>
+  <div class="unlock-hint">or press Enter</div>
+</div>
 
 <div class="ambient"></div>
 <div class="app-name">Sama</div>
@@ -465,13 +544,13 @@
       <div class="opt-label">Preparation time</div>
       <div class="opt-sub">Bell before session starts</div>
     </div>
-    <div class="opt-right">
+    <div class="opt-right" data-row="prep">
       <div class="stepper">
-        <button class="step-btn" id="prepDown">−</button>
-        <span class="step-val" id="prepVal">1 min</span>
-        <button class="step-btn" id="prepUp">+</button>
+        <button class="step-btn" id="prepDown" data-row-item="prep">−</button>
+        <span class="step-val" id="prepVal">15 sec</span>
+        <button class="step-btn" id="prepUp" data-row-item="prep">+</button>
       </div>
-      <label class="toggle">
+      <label class="toggle" tabindex="0" id="prepToggleLabel" data-row-item="prep" aria-label="Toggle preparation time">
         <input type="checkbox" id="prepToggle" checked>
         <div class="toggle-track"><div class="toggle-thumb"></div></div>
       </label>
@@ -484,11 +563,11 @@
       <div class="opt-label">Interval bells</div>
       <div class="opt-sub">Reminder chime during session</div>
     </div>
-    <div class="opt-right">
+    <div class="opt-right" data-row="int">
       <div class="stepper">
-        <button class="step-btn" id="intDown">−</button>
+        <button class="step-btn" id="intDown" data-row-item="int">−</button>
         <span class="step-val" id="intVal">Off</span>
-        <button class="step-btn" id="intUp">+</button>
+        <button class="step-btn" id="intUp" data-row-item="int">+</button>
       </div>
     </div>
   </div>
@@ -513,7 +592,7 @@
 <!-- ══════════ SESSION SCREEN ══════════ -->
 <div class="screen hidden" id="sessionScreen">
 
-  <div class="ring-wrapper" id="ringWrapper">
+  <div class="ring-wrapper" id="ringWrapper" role="timer" aria-label="Meditation timer progress">
     <svg class="ring-svg" viewBox="0 0 320 320" id="ringSVG">
       <!-- Outer ring (session) -->
       <circle class="ring-track" cx="160" cy="160" r="140"/>
@@ -533,11 +612,15 @@
   </div>
 
   <div class="session-controls">
-    <button class="ctrl-btn" id="backBtn">← Back</button>
+    <button class="ctrl-btn" id="backBtn" aria-label="Back to setup">← Back</button>
     <div class="ctrl-sep"></div>
-    <button class="ctrl-btn" id="stopBtn">Stop</button>
+    <button class="ctrl-btn" id="stopBtn" aria-label="Stop session">
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><rect x="1" y="1" width="10" height="10" rx="1.5"/></svg>Stop
+    </button>
     <div class="ctrl-sep"></div>
-    <button class="ctrl-btn primary" id="pauseBtn">Pause</button>
+    <button class="ctrl-btn primary" id="pauseBtn" aria-label="Pause session">
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><rect x="1.5" y="1" width="3" height="10" rx="1"/><rect x="7.5" y="1" width="3" height="10" rx="1"/></svg>Pause
+    </button>
   </div>
 
   <div class="session-meta" id="sessionMeta"></div>
@@ -558,8 +641,26 @@
 
 <script>
 /* ═══════════════════════════
-   STATE
+   AUDIO UNLOCK — must happen
+   synchronously on first tap
 ═══════════════════════════ */
+document.getElementById('unlockBtn').addEventListener('click', () => {
+  // Create and immediately resume AudioContext on user gesture
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx.resume().then(() => {
+    // Play a silent buffer to fully unlock on iOS
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
+  });
+  // Hide overlay and show app
+  const overlay = document.getElementById('audioUnlock');
+  overlay.classList.add('hidden');
+  setTimeout(() => overlay.style.display = 'none', 700);
+  setTimeout(() => focusSetup(), 150);
+});
 const state = {
   durationMin: 10,
   prepSecs: 15,
@@ -771,7 +872,23 @@ async function playBell(vol = 0.5) {
    UI HELPERS
 ═══════════════════════════ */
 function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.querySelectorAll('.screen').forEach(s => {
+    const isActive = s.id === id;
+    s.classList.toggle('hidden', !isActive);
+    // Disable all focusable elements in hidden screens so Tab can't reach them
+    s.querySelectorAll('button, input, [tabindex]').forEach(el => {
+      if (isActive) {
+        const saved = el.getAttribute('data-tabindex');
+        if (saved !== null) el.tabIndex = parseInt(saved);
+        else if (el.tabIndex < 0) {} // leave as-is
+      } else {
+        if (!el.hasAttribute('data-tabindex')) {
+          el.setAttribute('data-tabindex', el.tabIndex);
+        }
+        el.tabIndex = -1;
+      }
+    });
+  });
   document.getElementById(id).classList.remove('hidden');
 }
 
@@ -797,11 +914,11 @@ document.getElementById('durationGrid').addEventListener('click', e => {
 const prepVals = [0, 15, 30, 60];
 let prepIdx = 1;
 document.getElementById('prepUp').addEventListener('click', () => {
-  if (prepIdx < prepVals.length - 1) prepIdx++;
+  prepIdx = (prepIdx + 1) % prepVals.length;
   updatePrepVal();
 });
 document.getElementById('prepDown').addEventListener('click', () => {
-  if (prepIdx > 0) prepIdx--;
+  prepIdx = (prepIdx - 1 + prepVals.length) % prepVals.length;
   updatePrepVal();
 });
 function prepLabel(secs) {
@@ -823,11 +940,11 @@ document.getElementById('prepToggle').addEventListener('change', e => {
 const intVals = [0, 1, 5, 10, 15, 30];
 let intIdx = 0;
 document.getElementById('intUp').addEventListener('click', () => {
-  if (intIdx < intVals.length - 1) intIdx++;
+  intIdx = (intIdx + 1) % intVals.length;
   updateIntVal();
 });
 document.getElementById('intDown').addEventListener('click', () => {
-  if (intIdx > 0) intIdx--;
+  intIdx = (intIdx - 1 + intVals.length) % intVals.length;
   updateIntVal();
 });
 function updateIntVal() {
@@ -1031,24 +1148,47 @@ function showComplete() {
 /* ═══════════════════════════
    SESSION CONTROLS
 ═══════════════════════════ */
+const ICON_PAUSE  = '<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><rect x="1.5" y="1" width="3" height="10" rx="1"/><rect x="7.5" y="1" width="3" height="10" rx="1"/></svg>';
+const ICON_RESUME = '<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" style="margin-right:0.3rem;vertical-align:middle"><polygon points="2,1 11,6 2,11"/></svg>';
+
+function setPauseBtn(paused) {
+  const btn = document.getElementById('pauseBtn');
+  btn.innerHTML = paused ? ICON_RESUME + 'Resume' : ICON_PAUSE + 'Pause';
+}
+
 document.getElementById('pauseBtn').addEventListener('click', () => {
   state.paused = !state.paused;
-  document.getElementById('pauseBtn').textContent = state.paused ? 'Resume' : 'Pause';
+  setPauseBtn(state.paused);
   document.getElementById('phaseLabel').textContent = state.paused ? 'Paused' : '';
 });
 
 document.getElementById('backBtn').addEventListener('click', () => {
   if (state.timer) clearInterval(state.timer);
   state.phase = 'idle';
-  document.getElementById('pauseBtn').textContent = 'Pause';
+  setPauseBtn(false);
   showScreen('setupScreen');
 });
 
 document.getElementById('stopBtn').addEventListener('click', () => {
   if (state.timer) clearInterval(state.timer);
   state.phase = 'idle';
-  document.getElementById('pauseBtn').textContent = 'Pause';
+  setPauseBtn(false);
   showScreen('setupScreen');
+});
+
+// ── Session controls: arrow key navigation ──
+const sessionCtrlIds = ['backBtn', 'stopBtn', 'pauseBtn'];
+sessionCtrlIds.forEach((id, i) => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    const total = sessionCtrlIds.length;
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      document.getElementById(sessionCtrlIds[(i + 1) % total]).focus();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      document.getElementById(sessionCtrlIds[(i - 1 + total) % total]).focus();
+    }
+  });
 });
 
 /* ═══════════════════════════
@@ -1068,16 +1208,143 @@ document.getElementById('bellSelector').addEventListener('click', e => {
 });
 document.getElementById('againBtn').addEventListener('click', () => {
   if (state.timer) clearInterval(state.timer);
-  document.getElementById('pauseBtn').textContent = 'Pause';
+  setPauseBtn(false);
   showScreen('setupScreen');
 });
 document.getElementById('doneBtn').addEventListener('click', () => {
   if (state.timer) clearInterval(state.timer);
-  document.getElementById('pauseBtn').textContent = 'Pause';
+  setPauseBtn(false);
   showScreen('setupScreen');
 });
 
 
+
+/* ═══════════════════════════
+   KEYBOARD NAVIGATION
+═══════════════════════════ */
+
+// ── Duration grid: roving tabindex + arrow keys ──
+const durBtns = Array.from(document.querySelectorAll('.dur-btn'));
+
+function setDurFocus(idx) {
+  durBtns.forEach((b, i) => b.tabIndex = i === idx ? 0 : -1);
+  durBtns[idx].focus();
+}
+
+// Init: 10 min (index 1) is focusable, rest are -1
+durBtns.forEach((b, i) => b.tabIndex = i === 1 ? 0 : -1);
+
+document.getElementById('durationGrid').addEventListener('keydown', e => {
+  const cur = durBtns.findIndex(b => b === document.activeElement);
+  if (cur === -1) return;
+  const cols = 5;
+  const total = durBtns.length;
+  let next = cur;
+  if (e.key === 'ArrowRight')     next = (cur + 1) % total;
+  else if (e.key === 'ArrowLeft') next = (cur - 1 + total) % total;
+  else if (e.key === 'ArrowDown') next = (cur + cols) % total;
+  else if (e.key === 'ArrowUp')   next = (cur - cols + total) % total;
+  else return;
+  e.preventDefault();
+  setDurFocus(next);
+  durBtns[next].click();
+});
+
+// ── Bell selector: arrow keys ──
+const bellBtns = Array.from(document.querySelectorAll('.bell-btn'));
+
+function setBellFocus(idx) {
+  bellBtns.forEach((b, i) => b.tabIndex = i === 0 ? 0 : -1);
+  bellBtns[idx].tabIndex = 0;
+  bellBtns[idx].focus();
+}
+
+bellBtns.forEach((b, i) => {
+  b.tabIndex = i === 0 ? 0 : -1;
+  b.addEventListener('focus', () => {
+    selectedBell = b.dataset.bell;
+    bellBtns.forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    playBell(0.5);
+  });
+});
+
+document.getElementById('bellSelector').addEventListener('keydown', e => {
+  const cur = bellBtns.findIndex(b => b === document.activeElement);
+  if (cur === -1) return;
+  const total = bellBtns.length;
+  let next = cur;
+  if (e.key === 'ArrowRight')     next = (cur + 1) % total;
+  else if (e.key === 'ArrowLeft') next = (cur - 1 + total) % total;
+  else return;
+  e.preventDefault();
+  setBellFocus(next);
+  bellBtns[next].click();
+});
+
+// ── Row navigation: Left/Right arrows move between −, + and toggle within a row ──
+const rowItems = {
+  prep: ['prepDown', 'prepUp', 'prepToggleLabel'],
+  int:  ['intDown',  'intUp'],
+};
+
+Object.entries(rowItems).forEach(([row, ids]) => {
+  ids.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('keydown', e => {
+      // Arrow keys navigate within the row
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const next = ids[(i + 1) % ids.length];
+        document.getElementById(next).focus();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const prev = ids[(i - 1 + ids.length) % ids.length];
+        document.getElementById(prev).focus();
+      }
+      // Up/Down still change the value from anywhere in the row
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const upId   = row === 'prep' ? 'prepUp'   : 'intUp';
+        const downId = row === 'prep' ? 'prepDown' : 'intDown';
+        if (e.key === 'ArrowUp')   document.getElementById(upId).click();
+        if (e.key === 'ArrowDown') document.getElementById(downId).click();
+      }
+    });
+  });
+});
+
+// ── Toggle: Enter or Space activates it when label is focused ──
+document.getElementById('prepToggleLabel').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    document.getElementById('prepToggle').click();
+  }
+});
+
+// ── Auto-focus Pause when session screen loads ──
+const _origShowScreen = window.showScreen || showScreen;
+window.showScreen = function(id) {
+  _origShowScreen(id);
+  if (id === 'sessionScreen') {
+    setTimeout(() => document.getElementById('pauseBtn').focus(), 100);
+  }
+  if (id === 'setupScreen') focusSetup();
+};
+
+// ── Auto-focus 5 min when setup screen appears ──
+function focusSetup() {
+  setTimeout(() => {
+    durBtns.forEach((b, i) => b.tabIndex = i === 1 ? 0 : -1);
+    durBtns[1].focus();
+  }, 100);
+}
+
+// Focus setup after unlock
+document.getElementById('unlockBtn').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('unlockBtn').click();
+});
 
 /* ═══════════════════════════
    INIT
