@@ -268,6 +268,7 @@
     font-size: 3.2rem; font-weight: 200; letter-spacing: 0.04em;
     color: var(--text); line-height: 1;
     font-variant-numeric: tabular-nums;
+    transition: opacity 2.5s ease;
   }
 
   .time-label {
@@ -275,6 +276,7 @@
     text-transform: uppercase; color: rgba(255,255,255,0.55);
     font-style: italic;
     margin-top: 0.4rem;
+    transition: opacity 2.5s ease;
   }
 
   .phase-label {
@@ -282,6 +284,7 @@
     text-transform: uppercase; color: rgba(200,133,90,0.8);
     margin-top: 0.6rem;
     min-height: 1em;
+    transition: opacity 2s ease;
   }
 
   /* Peek mode (hide time) */
@@ -645,17 +648,22 @@
    synchronously on first tap
 ═══════════════════════════ */
 document.getElementById('unlockBtn').addEventListener('click', () => {
-  // Create and immediately resume AudioContext on user gesture
+  // iOS Safari: create context AND start audio in the SAME synchronous gesture
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  audioCtx.resume().then(() => {
-    // Play a silent buffer to fully unlock on iOS
-    const buf = audioCtx.createBuffer(1, 1, 22050);
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    src.connect(audioCtx.destination);
-    src.start(0);
-  });
-  // Hide overlay and show app
+
+  // Play a near-silent oscillator synchronously — this is what truly unlocks iOS
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.001;
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(0);
+  osc.stop(audioCtx.currentTime + 0.1);
+
+  // Resume if suspended (some browsers start suspended)
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  // Hide overlay
   const overlay = document.getElementById('audioUnlock');
   overlay.classList.add('hidden');
   setTimeout(() => overlay.style.display = 'none', 700);
@@ -672,6 +680,8 @@ const state = {
   secsLeft: 0,
   paused: false,
   timer: null,
+  prepPhraseTimer: null,
+  sessionPhraseTimer: null,
   sessionStarted: null,
 };
 
@@ -685,9 +695,9 @@ function getAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
 }
-async function ensureAudio() {
+function ensureAudio() {
   const ctx = getAudio();
-  if (ctx.state === 'suspended') await ctx.resume();
+  if (ctx.state === 'suspended') ctx.resume();
   return ctx;
 }
 
@@ -850,12 +860,10 @@ function bellRin(ctx, now, vol = 0.5) {
   } catch(e) { console.warn('Rin bell error:', e); }
 }
 
-/* ── Bell dispatcher — resumes context synchronously on user gesture ── */
-async function playBell(vol = 0.5) {
+/* ── Bell dispatcher — fully synchronous for iOS Safari ── */
+function playBell(vol = 0.5) {
   try {
-    const ctx = getAudio();
-    ctx.resume(); // synchronous trigger — must happen directly in click handler
-    await ctx.resume(); // wait for it to actually be running
+    const ctx = ensureAudio();
     const now = ctx.currentTime;
     switch (selectedBell) {
       case 'tibetan': bellTibetan(ctx, now, vol); break;
@@ -989,9 +997,9 @@ function initRings() {
 /* ═══════════════════════════
    SESSION ENGINE
 ═══════════════════════════ */
-async function beginSession() {
+function beginSession() {
   const ctx = getAudio();
-  ctx.resume();
+  if (ctx.state === 'suspended') ctx.resume();
 
   state.prepEnabled = document.getElementById('prepToggle').checked && prepVals[prepIdx] > 0;
   state.prepSecs = prepVals[prepIdx];
@@ -1007,7 +1015,7 @@ async function beginSession() {
     startPrep();
   } else {
     playBell(0.75); // start bell — no prep, rings immediately
-    setTimeout(() => startMeditation(), 1000);
+    startMeditation();
   }
 }
 
@@ -1024,8 +1032,24 @@ function startPrep() {
   pp.style.display = 'block';
   setRingProgress(pp, INNER_R, 1);
 
-  document.getElementById('phaseLabel').textContent = 'Preparing';
-  document.getElementById('timeLabel').textContent = 'prepare';
+  document.getElementById('timeLabel').textContent = '';
+
+  // Rotating prep phrases
+  const prepPhrases = ['breathe', 'arrive', 'rest here', 'settle in', 'soften', 'let go'];
+  let prepPhraseIdx = 0;
+  const phaseEl = document.getElementById('phaseLabel');
+  phaseEl.textContent = prepPhrases[0];
+
+  if (state.prepPhraseTimer) clearInterval(state.prepPhraseTimer);
+  state.prepPhraseTimer = setInterval(() => {
+    if (state.phase !== 'prep') { clearInterval(state.prepPhraseTimer); return; }
+    phaseEl.style.opacity = '0';
+    setTimeout(() => {
+      prepPhraseIdx = (prepPhraseIdx + 1) % prepPhrases.length;
+      phaseEl.textContent = prepPhrases[prepPhraseIdx];
+      phaseEl.style.opacity = '1';
+    }, 2000);
+  }, 5000);
 
   tickPrep();
 }
@@ -1037,12 +1061,20 @@ function tickPrep() {
     if (state.paused) return;
     state.secsLeft--;
     updatePrepDisplay();
+
+    // Begin fading out 1 second before prep ends
+    if (state.secsLeft === 1) {
+      const rc = document.getElementById('ringCenter');
+      rc.style.transition = 'opacity 1s ease';
+      rc.style.opacity = '0';
+    }
+
     if (state.secsLeft <= 0) {
       clearInterval(state.timer);
       document.getElementById('prepProgress').style.display = 'none';
       document.getElementById('prepTrack').style.display = 'none';
       playBell(0.75); // full bell — session now begins
-      setTimeout(() => startMeditation(), 1000);
+      startMeditation();
     }
   }, 1000);
 }
@@ -1075,8 +1107,39 @@ function startMeditation() {
     setRingProgress(ip, INT_R, 1);
   }
 
+  // Fade everything in slowly — meditative transition
+  const ringCenter = document.getElementById('ringCenter');
+  const timeLabelEl = document.getElementById('timeLabel');
+  const timeDisplayEl = document.getElementById('timeDisplay');
+  const phaseEl2 = document.getElementById('phaseLabel');
+
+  ringCenter.style.opacity = '0';
   document.getElementById('phaseLabel').textContent = '';
-  document.getElementById('timeLabel').textContent = 'remaining';
+  timeLabelEl.textContent = 'remaining';
+  requestAnimationFrame(() => {
+    ringCenter.style.transition = 'opacity 3s ease';
+    ringCenter.style.opacity = '1';
+  });
+
+  // Rotating session phrases
+  const sessionPhrases = [
+    'you are home', 'nothing to do', 'truth', 'being',
+    'shanti · peace', 'ananda · bliss', 'sukha · ease',
+    'sahaja · effortless', 'just this', 'you are home',
+    'shanti · peace', 'nothing to do', 'being', 'truth'
+  ];
+  let sessionPhraseIdx = 0;
+
+  if (state.sessionPhraseTimer) clearInterval(state.sessionPhraseTimer);
+  state.sessionPhraseTimer = setInterval(() => {
+    if (state.phase !== 'session' || state.paused) return;
+    phaseEl2.style.opacity = '0';
+    setTimeout(() => {
+      sessionPhraseIdx = (sessionPhraseIdx + 1) % sessionPhrases.length;
+      phaseEl2.textContent = sessionPhrases[sessionPhraseIdx];
+      phaseEl2.style.opacity = '1';
+    }, 2000);
+  }, 15000);
 
   setRingProgress(document.getElementById('ringProgress'), OUTER_R, 1);
 
@@ -1084,18 +1147,17 @@ function startMeditation() {
   if (state.timer) clearInterval(state.timer);
   state.timer = setInterval(() => {
     if (state.paused) return;
-    state.secsLeft--;
 
     // Interval bell
     if (state.intervalMin > 0 && state.secsLeft <= nextIntervalAt && nextIntervalAt > 0) {
-      playBell(0.45); // interval bell — softer nudge
+      playBell(0.45);
       nextIntervalAt -= state.intervalMin * 60;
-      // Flash interval ring
       const ip = document.getElementById('intProgress');
       setRingProgress(ip, INT_R, 1);
     }
 
     updateSessionDisplay();
+    state.secsLeft--;
 
     if (state.secsLeft <= 0) {
       clearInterval(state.timer);
@@ -1159,11 +1221,20 @@ function setPauseBtn(paused) {
 document.getElementById('pauseBtn').addEventListener('click', () => {
   state.paused = !state.paused;
   setPauseBtn(state.paused);
-  document.getElementById('phaseLabel').textContent = state.paused ? 'Paused' : '';
+  const phaseEl = document.getElementById('phaseLabel');
+  if (state.paused) {
+    phaseEl.style.opacity = '0';
+    setTimeout(() => { phaseEl.textContent = 'paused'; phaseEl.style.opacity = '1'; }, 2000);
+  } else {
+    phaseEl.style.opacity = '0';
+    setTimeout(() => { phaseEl.textContent = ''; phaseEl.style.opacity = '1'; }, 2000);
+  }
 });
 
 document.getElementById('backBtn').addEventListener('click', () => {
   if (state.timer) clearInterval(state.timer);
+  if (state.prepPhraseTimer) clearInterval(state.prepPhraseTimer);
+  if (state.sessionPhraseTimer) clearInterval(state.sessionPhraseTimer);
   state.phase = 'idle';
   setPauseBtn(false);
   showScreen('setupScreen');
@@ -1171,6 +1242,8 @@ document.getElementById('backBtn').addEventListener('click', () => {
 
 document.getElementById('stopBtn').addEventListener('click', () => {
   if (state.timer) clearInterval(state.timer);
+  if (state.prepPhraseTimer) clearInterval(state.prepPhraseTimer);
+  if (state.sessionPhraseTimer) clearInterval(state.sessionPhraseTimer);
   state.phase = 'idle';
   setPauseBtn(false);
   showScreen('setupScreen');
