@@ -572,8 +572,12 @@ function handleUnlock() {
 function unlockBellPool() {
   BELL_NAMES.forEach(name => {
     bellPool[name].forEach(a => {
-      a.volume = 0;
-      a.play().then(() => { a.pause(); a.currentTime = 0; a.volume = 1; }).catch(() => {});
+      a.muted = true;
+      a.play().then(() => {
+        a.pause();
+        a.currentTime = 0;
+        a.muted = false;
+      }).catch(() => {});
     });
   });
 }
