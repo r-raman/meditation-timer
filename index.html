@@ -533,6 +533,8 @@
   </div>
 
   <div class="session-controls">
+    <button class="ctrl-btn" id="backBtn">← Back</button>
+    <div class="ctrl-sep"></div>
     <button class="ctrl-btn" id="stopBtn">Stop</button>
     <div class="ctrl-sep"></div>
     <button class="ctrl-btn primary" id="pauseBtn">Pause</button>
@@ -1033,6 +1035,13 @@ document.getElementById('pauseBtn').addEventListener('click', () => {
   state.paused = !state.paused;
   document.getElementById('pauseBtn').textContent = state.paused ? 'Resume' : 'Pause';
   document.getElementById('phaseLabel').textContent = state.paused ? 'Paused' : '';
+});
+
+document.getElementById('backBtn').addEventListener('click', () => {
+  if (state.timer) clearInterval(state.timer);
+  state.phase = 'idle';
+  document.getElementById('pauseBtn').textContent = 'Pause';
+  showScreen('setupScreen');
 });
 
 document.getElementById('stopBtn').addEventListener('click', () => {
