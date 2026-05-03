@@ -644,74 +644,79 @@
 
 <script>
 /* ═══════════════════════════
-   AUDIO — declared first so
-   unlock handler can access it
+   AUDIO — HTML5 Audio elements
+   Uses assets/ wav files —
+   works on all mobile browsers
 ═══════════════════════════ */
-let audioCtx = null;
 let selectedBell = 'tibetan';
-let audioUnlocked = false;
+const BELL_NAMES = ['tibetan', 'temple', 'tingsha', 'crystal', 'rin'];
 
-function getAudio() {
-  if (!audioCtx) {
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    } catch(e) {
-      console.warn('AudioContext creation failed:', e);
-    }
-  }
-  return audioCtx;
-}
-
-function ensureAudio() {
-  const ctx = getAudio();
-  if (ctx && ctx.state === 'suspended') ctx.resume();
-  return ctx;
-}
-
-function unlockAudio() {
-  if (audioUnlocked) return;
-  try {
-    // Create context if not already done
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    // Resume synchronously
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-
-    // Play a real audible-but-silent tone — the ONLY thing iOS accepts as proof
-    const osc  = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
-    osc.frequency.value = 440;
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + 0.5);
-
-    audioUnlocked = true;
-  } catch(e) {
-    console.warn('Audio unlock failed:', e);
-  }
-}
-
-// Resume AudioContext when page becomes visible again (mobile background/foreground)
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
+// Pre-load all bell audio elements
+const bellAudio = {};
+BELL_NAMES.forEach(name => {
+  const audio = new Audio();
+  audio.src = `assets/${name}.wav`;
+  audio.preload = 'auto';
+  bellAudio[name] = audio;
 });
 
-// Secondary unlock on any touch — catches cases where Enter button tap wasn't enough
-document.addEventListener('touchstart', () => {
-  if (!audioUnlocked) unlockAudio();
-}, { once: true, passive: true });
+let currentBellNode = null;
+let bellDebounce = null;
+
+function fadeOutBell(audio, duration = 1000) {
+  if (!audio) return;
+  const start = audio.volume;
+  const steps = 30;
+  const interval = duration / steps;
+  let step = 0;
+  const fade = setInterval(() => {
+    step++;
+    audio.volume = Math.max(0, start * (1 - step / steps));
+    if (step >= steps) {
+      clearInterval(fade);
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, interval);
+}
+
+function playBell(vol = 0.5, debounce = false) {
+  try {
+    clearTimeout(bellDebounce);
+
+    const fire = () => {
+      // Fade out previous bell instead of cutting it
+      if (currentBellNode) fadeOutBell(currentBellNode, 800);
+
+      const src = bellAudio[selectedBell];
+      if (!src) return;
+      const a = src.cloneNode();
+      a.volume = Math.min(1, Math.max(0, vol));
+      a.play().catch(e => console.warn('Bell play error:', e));
+      currentBellNode = a;
+    };
+
+    if (debounce) {
+      bellDebounce = setTimeout(fire, 300);
+    } else {
+      fire();
+    }
+  } catch(e) { console.warn('Bell error:', e); }
+}
 
 /* ═══════════════════════════
    AUDIO UNLOCK SCREEN
+   iOS needs a user gesture to
+   allow audio — Enter does it
 ═══════════════════════════ */
 function handleUnlock() {
-  unlockAudio();
+  // Unlock all audio on user gesture — iOS Safari requirement
+  // Volume set to 0 so unlock is completely silent
+  BELL_NAMES.forEach(name => {
+    const a = bellAudio[name].cloneNode();
+    a.volume = 0;
+    a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+  });
   const overlay = document.getElementById('audioUnlock');
   overlay.classList.add('hidden');
   setTimeout(() => overlay.style.display = 'none', 700);
@@ -720,7 +725,7 @@ function handleUnlock() {
 
 document.getElementById('unlockBtn').addEventListener('click', handleUnlock);
 document.getElementById('unlockBtn').addEventListener('touchend', e => {
-  e.preventDefault(); // prevent ghost click on iOS
+  e.preventDefault();
   handleUnlock();
 });
 const state = {
@@ -738,199 +743,6 @@ const state = {
   sessionPhraseTimer: null,
   sessionStarted: null,
 };
-
-/* ═══════════════════════════
-   AUDIO — 5 Bell Synthesizers
-═══════════════════════════ */
-function getAudio() {
-  if (!audioCtx) {
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    } catch(e) { console.warn('AudioContext failed:', e); }
-  }
-  return audioCtx;
-}
-function ensureAudio() {
-  const ctx = getAudio();
-  if (ctx && ctx.state === 'suspended') ctx.resume();
-  return ctx;
-}
-
-/* ── Shared helpers ── */
-function addPartial(ctx, master, freq, gain, decay, now, type = 'sine') {
-  const osc = ctx.createOscillator();
-  const env = ctx.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, now);
-  env.gain.setValueAtTime(0, now);
-  env.gain.linearRampToValueAtTime(gain, now + 0.01);
-  env.gain.exponentialRampToValueAtTime(0.0001, now + decay);
-  osc.connect(env); env.connect(master);
-  osc.start(now); osc.stop(now + decay + 0.05);
-}
-
-function addNoise(ctx, master, volume, cutoff, q, duration, now) {
-  const bufLen = Math.floor(ctx.sampleRate * duration);
-  const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/bufLen, 4);
-  const src = ctx.createBufferSource();
-  const filt = ctx.createBiquadFilter();
-  const env = ctx.createGain();
-  filt.type = 'bandpass'; filt.frequency.value = cutoff; filt.Q.value = q;
-  src.buffer = buf;
-  src.connect(filt); filt.connect(env); env.connect(master);
-  env.gain.setValueAtTime(volume, now);
-  env.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-  src.start(now);
-}
-
-/* ════════════════════════════════════════
-   1. TIBETAN SINGING BOWL
-   Warm, deep, inharmonic bowl partials.
-   Ratios from real bowl acoustics: 1, 2.73, 5.25, 8.65
-════════════════════════════════════════ */
-async function bellTibetan(ctx, now, vol = 0.5) {
-  try {
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(1, now);
-    master.connect(ctx.destination);
-
-  const f0 = 196; // G3 — classic Tibetan bowl pitch
-  const partials = [
-    { f: f0,         g: vol*0.55, d: 8.0 },
-    { f: f0 * 2.73,  g: vol*0.30, d: 6.0 },
-    { f: f0 * 5.25,  g: vol*0.14, d: 4.0 },
-    { f: f0 * 8.65,  g: vol*0.06, d: 2.5 },
-  ];
-  partials.forEach(({f, g, d}) => {
-    addPartial(ctx, master, f,        g,     d, now);
-    addPartial(ctx, master, f * 1.002, g*0.4, d, now);
-  });
-  addNoise(ctx, master, vol*0.45, 180, 1.2, 0.09, now);
-  } catch(e) { console.warn('Tibetan bell error:', e); }
-}
-
-/* ════════════════════════════════════════
-   2. JAPANESE TEMPLE BELL (Bonshō 梵鐘)
-════════════════════════════════════════ */
-function bellTemple(ctx, now, vol = 0.5) {
-  try {
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(1, now);
-    master.connect(ctx.destination);
-
-  const f0 = 68; // Very deep — C2 range
-  const partials = [
-    { f: f0,         g: vol*0.60, d: 12.0 },
-    { f: f0 * 2.07,  g: vol*0.35, d: 9.0  },
-    { f: f0 * 3.01,  g: vol*0.20, d: 6.5  },
-    { f: f0 * 4.25,  g: vol*0.10, d: 4.5  },
-    { f: f0 * 5.87,  g: vol*0.05, d: 3.0  },
-  ];
-  partials.forEach(({f, g, d}) => addPartial(ctx, master, f, g, d, now));
-  addNoise(ctx, master, vol*0.7,  80,  0.7, 0.18, now);
-  addNoise(ctx, master, vol*0.3, 200,  1.0, 0.08, now);
-  addPartial(ctx, master, 38, vol*0.12, 5.0, now);
-  } catch(e) { console.warn('Temple bell error:', e); }
-}
-
-/* ════════════════════════════════════════
-   3. TINGSHA (Tibetan Prayer Cymbals)
-════════════════════════════════════════ */
-function bellTingsha(ctx, now, vol = 0.5) {
-  try {
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(1, now);
-    master.connect(ctx.destination);
-
-  const f0 = 900; // High bright cymbal
-  const partials = [
-    { f: f0,          g: vol*0.50, d: 4.0 },
-    { f: f0 * 2.76,   g: vol*0.28, d: 3.0 },
-    { f: f0 * 5.40,   g: vol*0.14, d: 2.0 },
-    { f: f0 * 8.93,   g: vol*0.07, d: 1.2 },
-    { f: f0 * 13.34,  g: vol*0.03, d: 0.7 },
-  ];
-  partials.forEach(({f, g, d}) => {
-    addPartial(ctx, master, f,         g,      d,   now);
-    addPartial(ctx, master, f * 1.003, g*0.35, d*0.8, now);
-  });
-  addNoise(ctx, master, vol*0.6, 2800, 3.0, 0.035, now);
-  addNoise(ctx, master, vol*0.3, 900,  2.0, 0.025, now);
-  } catch(e) { console.warn('Tingsha error:', e); }
-}
-
-/* ════════════════════════════════════════
-   4. CRYSTAL SINGING BOWL
-════════════════════════════════════════ */
-function bellCrystal(ctx, now, vol = 0.5) {
-  try {
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(1, now);
-    master.connect(ctx.destination);
-
-    const f0 = 432;
-    const pairs = [
-      { f: f0,       g: vol*0.55, d: 11.0 },
-      { f: f0*1.004, g: vol*0.50, d: 11.0 },
-      { f: f0*2.0,   g: vol*0.08, d: 7.0  },
-      { f: f0*2.004, g: vol*0.07, d: 7.0  },
-    ];
-    pairs.forEach(({f, g, d}) => {
-      const osc = ctx.createOscillator();
-      const env = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(f, now);
-      env.gain.setValueAtTime(0, now);
-      env.gain.linearRampToValueAtTime(g, now + 0.08);
-      env.gain.setValueAtTime(g, now + 0.3);
-      env.gain.exponentialRampToValueAtTime(0.0001, now + d);
-      osc.connect(env); env.connect(master);
-      osc.start(now); osc.stop(now + d + 0.1);
-    });
-    addNoise(ctx, master, vol*0.15, 1200, 4.0, 0.04, now);
-  } catch(e) { console.warn('Crystal bell error:', e); }
-}
-
-/* ════════════════════════════════════════
-   5. ZEN RIN BELL
-════════════════════════════════════════ */
-function bellRin(ctx, now, vol = 0.5) {
-  try {
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(1, now);
-    master.connect(ctx.destination);
-
-    const f0 = 480;
-    const partials = [
-      { f: f0,        g: vol*0.52, d: 6.5 },
-      { f: f0 * 2.65, g: vol*0.28, d: 4.5 },
-      { f: f0 * 4.98, g: vol*0.13, d: 3.0 },
-      { f: f0 * 8.12, g: vol*0.05, d: 1.8 },
-    ];
-    partials.forEach(({f, g, d}) => addPartial(ctx, master, f, g, d, now));
-    addNoise(ctx, master, vol*0.4, 500, 2.5, 0.05, now);
-    addNoise(ctx, master, vol*0.2, 1800, 3.0, 0.025, now);
-  } catch(e) { console.warn('Rin bell error:', e); }
-}
-
-/* ── Bell dispatcher — fully synchronous for iOS Safari ── */
-function playBell(vol = 0.5) {
-  try {
-    const ctx = ensureAudio();
-    if (!ctx) return;
-    const now = ctx.currentTime + 0.05; // small offset for mobile scheduling reliability
-    switch (selectedBell) {
-      case 'tibetan': bellTibetan(ctx, now, vol); break;
-      case 'temple':  bellTemple(ctx, now, vol);  break;
-      case 'tingsha': bellTingsha(ctx, now, vol); break;
-      case 'crystal': bellCrystal(ctx, now, vol); break;
-      case 'rin':     bellRin(ctx, now, vol);     break;
-      default:        bellTibetan(ctx, now, vol);
-    }
-  } catch(e) { console.warn('Bell error:', e); }
-}
 
 /* ═══════════════════════════
    UI HELPERS
@@ -1054,9 +866,6 @@ function initRings() {
    SESSION ENGINE
 ═══════════════════════════ */
 function beginSession() {
-  const ctx = getAudio();
-  if (ctx.state === 'suspended') ctx.resume();
-
   state.prepEnabled = document.getElementById('prepToggle').checked && prepVals[prepIdx] > 0;
   state.prepSecs = prepVals[prepIdx];
   state.intervalMin = intVals[intIdx];
@@ -1324,6 +1133,10 @@ sessionCtrlIds.forEach((id, i) => {
    INIT
 ═══════════════════════════ */
 document.getElementById('beginBtn').addEventListener('click', beginSession);
+document.getElementById('beginBtn').addEventListener('touchend', e => {
+  e.preventDefault();
+  beginSession();
+});
 
 
 // Bell selector — preview on tap
@@ -1388,13 +1201,25 @@ function setBellFocus(idx) {
   bellBtns[idx].focus();
 }
 
+let pageVisible = true;
+document.addEventListener('visibilitychange', () => {
+  pageVisible = !document.hidden;
+});
+window.addEventListener('blur', () => { pageVisible = false; });
+window.addEventListener('focus', () => {
+  // Short delay so focus event on bell buttons fires first, then we re-enable
+  setTimeout(() => { pageVisible = true; }, 600);
+});
+
 bellBtns.forEach((b, i) => {
   b.tabIndex = i === 0 ? 0 : -1;
   b.addEventListener('focus', () => {
     selectedBell = b.dataset.bell;
     bellBtns.forEach(x => x.classList.remove('active'));
     b.classList.add('active');
-    playBell(0.5);
+    // Don't play if returning from another tab/app
+    if (!pageVisible) return;
+    playBell(0.5, true);
   });
 });
 
