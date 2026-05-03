@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Sama · Meditation Timer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,200;0,300;0,400;1,200;1,300&family=Noto+Serif+JP:wght@200;300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  :root {
+    --bg:        #08080f;
+    --bg2:       #0f0f1a;
+    --ring-bg:   rgba(255,255,255,0.05);
+    --ring:      #c8855a;
+    --ring-glow: rgba(200,133,90,0.18);
+    --text:      rgba(255,255,255,0.92);
+    --text-dim:  rgba(255,255,255,0.60);
+    --text-faint:rgba(255,255,255,0.35);
+    --accent:    #c8855a;
+    --r: 140;          /* SVG circle radius */
+    --stroke: 3.5;     /* ring stroke width */
+  }
+
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    -webkit-font-smoothing: antialiased;
+    touch-action: manipulation;
+  }
+
+  /* ── Screens ── */
+  .screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity 0.6s ease, transform 0.6s ease;
+    will-change: opacity, transform;
+  }
+  .screen.hidden {
+    opacity: 0; pointer-events: none; transform: scale(0.97);
+  }
+
+  /* ── Shared header ── */
+  .app-name {
+    position: fixed; top: 2.4rem; left: 50%; transform: translateX(-50%);
+    font-family: 'Noto Serif JP', serif;
+    font-weight: 200; font-size: 1.1rem;
+    letter-spacing: 0.45em; color: var(--text-dim);
+    z-index: 50;
+  }
+
+  /* ════════════════════════════
+     SETUP SCREEN
+  ════════════════════════════ */
+  #setupScreen {
+    gap: 0;
+    padding: 0 2rem;
+  }
+
+  .setup-title {
+    font-style: italic; font-weight: 300; font-size: 0.9rem;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 2.8rem;
+    margin-top: 5.5rem;
+  }
+
+  /* Duration grid */
+  .duration-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.7rem;
+    width: 100%; max-width: 380px;
+    margin-bottom: 2rem;
+  }
+
+  .dur-btn {
+    background: var(--ring-bg);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: rgba(255,255,255,0.75);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.15rem; font-weight: 300;
+    letter-spacing: 0.04em;
+    padding: 0.9rem 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 0.15rem;
+  }
+  .dur-btn .unit {
+    font-size: 0.65rem; letter-spacing: 0.2em;
+    text-transform: uppercase; color: rgba(255,255,255,0.45);
+  }
+  .dur-btn:hover, .dur-btn.active {
+    background: rgba(200,133,90,0.12);
+    border-color: rgba(200,133,90,0.45);
+    color: var(--accent);
+  }
+  .dur-btn.active .unit { color: rgba(200,133,90,0.6); }
+
+  /* Options rows */
+  .options-row {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; max-width: 380px;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .options-row:last-of-type { border-bottom: none; }
+
+  .opt-label {
+    font-size: 0.9rem; font-weight: 300;
+    letter-spacing: 0.06em; color: rgba(255,255,255,0.80);
+  }
+  .opt-sub {
+    font-size: 0.72rem; color: rgba(255,255,255,0.45);
+    letter-spacing: 0.04em; margin-top: 0.15rem;
+  }
+
+  .opt-right {
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+
+  /* Toggle switch */
+  .toggle {
+    position: relative; width: 36px; height: 20px; cursor: pointer;
+  }
+  .toggle input { display: none; }
+  .toggle-track {
+    width: 36px; height: 20px; border-radius: 10px;
+    background: rgba(255,255,255,0.15);
+    transition: background 0.25s;
+    position: relative;
+  }
+  .toggle-thumb {
+    position: absolute; top: 3px; left: 3px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    transition: transform 0.25s, background 0.25s;
+  }
+  .toggle input:checked ~ .toggle-track { background: rgba(200,133,90,0.4); }
+  .toggle input:checked ~ .toggle-track .toggle-thumb {
+    transform: translateX(16px);
+    background: var(--accent);
+  }
+
+  /* Mini stepper for prep/interval */
+  .stepper {
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .step-btn {
+    background: none; border: 1px solid rgba(255,255,255,0.25);
+    width: 26px; height: 26px; border-radius: 50%;
+    color: rgba(255,255,255,0.7); font-size: 1rem; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .step-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .step-val {
+    font-size: 0.85rem; color: rgba(255,255,255,0.80);
+    min-width: 2.5rem; text-align: center;
+    letter-spacing: 0.04em;
+  }
+
+  /* Begin button */
+  .begin-btn {
+    margin-top: 2.4rem;
+    background: rgba(200,133,90,0.15);
+    border: 1.5px solid rgba(200,133,90,0.7);
+    border-radius: 50px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.95rem; font-weight: 400;
+    letter-spacing: 0.35em; text-transform: uppercase;
+    color: #c8855a;
+    padding: 0.95rem 4rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 1;
+  }
+  .begin-btn:hover {
+    background: rgba(200,133,90,0.25);
+    border-color: rgba(200,133,90,1);
+    color: #e8a870;
+  }
+
+
+
+  /* ════════════════════════════
+     SESSION SCREEN
+  ════════════════════════════ */
+  #sessionScreen {
+    gap: 0;
+  }
+
+  .ring-wrapper {
+    position: relative;
+    width: 320px; height: 320px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .ring-svg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  /* Background arc (full circle) */
+  .ring-track {
+    fill: none;
+    stroke: var(--ring-bg);
+    stroke-width: var(--stroke);
+  }
+
+  /* Progress arc */
+  .ring-progress {
+    fill: none;
+    stroke: var(--ring);
+    stroke-width: var(--stroke);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+    filter: drop-shadow(0 0 6px rgba(200,133,90,0.5));
+  }
+
+  /* Prep arc (inner smaller circle) */
+  .ring-prep-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.04);
+    stroke-width: 2;
+  }
+  .ring-prep-progress {
+    fill: none;
+    stroke: rgba(200,133,90,0.4);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  /* Interval dots */
+  .ring-interval-progress {
+    fill: none;
+    stroke: rgba(200,133,90,0.55);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 1 999;
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  /* Center content */
+  .ring-center {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 0.3rem;
+    z-index: 2;
+    transition: opacity 0.4s;
+  }
+
+  .time-display {
+    font-size: 3.2rem; font-weight: 200; letter-spacing: 0.04em;
+    color: var(--text); line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .time-label {
+    font-size: 0.62rem; letter-spacing: 0.35em;
+    text-transform: uppercase; color: var(--text-faint);
+    font-style: italic;
+  }
+
+  .phase-label {
+    font-size: 0.68rem; letter-spacing: 0.3em;
+    text-transform: uppercase; color: rgba(200,133,90,0.5);
+    margin-top: 0.2rem;
+    min-height: 1em;
+  }
+
+  /* Peek mode (hide time) */
+  .ring-center.peek-hidden .time-display,
+  .ring-center.peek-hidden .time-label {
+    opacity: 0;
+  }
+
+  /* Controls */
+  .session-controls {
+    margin-top: 3rem;
+    display: flex; align-items: center; gap: 2.8rem;
+  }
+
+  .ctrl-btn {
+    background: none; border: none;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.85rem; letter-spacing: 0.25em;
+    text-transform: uppercase; color: var(--text-dim);
+    cursor: pointer; transition: color 0.2s, opacity 0.2s;
+    opacity: 1; padding: 0.5rem 0;
+  }
+  .ctrl-btn:hover { color: var(--text); }
+  .ctrl-btn.primary { color: var(--accent); opacity: 1; }
+  .ctrl-btn.primary:hover { opacity: 1; }
+
+  .ctrl-sep { width:1px; height:14px; background: rgba(255,255,255,0.1); }
+
+  /* Session info strip */
+  .session-meta {
+    position: fixed; bottom: 2.5rem;
+    font-size: 0.65rem; letter-spacing: 0.22em;
+    color: var(--text-faint); font-style: italic;
+  }
+
+  /* ════════════════════════════
+     COMPLETE SCREEN
+  ════════════════════════════ */
+  #completeScreen {
+    gap: 0;
+    text-align: center;
+  }
+
+  .complete-circle {
+    width: 120px; height: 120px; margin-bottom: 2.5rem;
+  }
+
+  .complete-circle circle {
+    fill: none;
+    stroke: rgba(200,133,90,0.25);
+    stroke-width: 2;
+    filter: drop-shadow(0 0 8px rgba(200,133,90,0.3));
+  }
+
+  .complete-title {
+    font-weight: 200; font-size: 2rem; letter-spacing: 0.15em;
+    color: var(--text); margin-bottom: 0.5rem;
+    font-style: italic;
+  }
+
+  .complete-duration {
+    font-size: 0.72rem; letter-spacing: 0.4em;
+    text-transform: uppercase; color: var(--text-faint);
+    margin-bottom: 3rem;
+  }
+
+  .complete-actions {
+    display: flex; gap: 2rem; align-items: center;
+  }
+
+  .complete-btn {
+    background: none; border: none;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.7rem; letter-spacing: 0.3em;
+    text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+    padding: 0.5rem 0;
+  }
+
+  .complete-btn.primary {
+    border: 1px solid rgba(200,133,90,0.3);
+    border-radius: 40px; padding: 0.7rem 2.5rem;
+    color: var(--accent); opacity: 0.85;
+  }
+  .complete-btn.primary:hover {
+    background: rgba(200,133,90,0.08);
+    border-color: rgba(200,133,90,0.6); opacity: 1;
+  }
+  .complete-btn.secondary { color: var(--text-dim); opacity: 0.6; }
+  .complete-btn.secondary:hover { opacity: 1; color: var(--text); }
+
+  /* ── Ambient background pulse ── */
+  .ambient {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 55%,
+      rgba(200,133,90,0.04) 0%, transparent 70%);
+    animation: ambientPulse 8s ease-in-out infinite;
+  }
+  @keyframes ambientPulse {
+    0%,100% { opacity: 0.6; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.05); }
+  }
+
+  /* ── Fade-in on load ── */
+  @keyframes fadeIn {
+    from { opacity:0; transform: translateY(8px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  .screen:not(.hidden) { animation: fadeIn 0.5s ease forwards; }
+
+  /* ── Responsiveness ── */
+  @media (max-height: 650px) {
+    .app-name { top: 1.2rem; font-size: 0.9rem; }
+    .setup-title { margin-top: 4rem; margin-bottom: 1.6rem; }
+    .ring-wrapper { width: 260px; height: 260px; }
+    .time-display { font-size: 2.6rem; }
+    .session-controls { margin-top: 2rem; }
+  }
+  @media (max-width: 400px) {
+    .duration-grid { grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+    .dur-btn { font-size: 0.95rem; padding: 0.75rem 0; }
+    .ring-wrapper { width: 280px; height: 280px; }
+  }
+
+  /* ── Bell selector ── */
+  .bell-selector-wrap {
+    width: 100%; max-width: 380px;
+    margin-bottom: 0.2rem;
+    padding: 0.85rem 0 0.6rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .bell-sel-label {
+    font-size: 0.9rem; font-weight: 300;
+    letter-spacing: 0.06em; color: rgba(255,255,255,0.80);
+    margin-bottom: 0.75rem;
+  }
+  .bell-selector {
+    display: flex; gap: 0.45rem; flex-wrap: wrap;
+  }
+  .bell-btn {
+    background: var(--ring-bg);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 20px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.82rem; letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.70);
+    padding: 0.42rem 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+  .bell-btn:hover {
+    border-color: rgba(200,133,90,0.45);
+    color: rgba(200,133,90,0.9);
+  }
+  .bell-btn.active {
+    background: rgba(200,133,90,0.12);
+    border-color: rgba(200,133,90,0.6);
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div class="ambient"></div>
+<div class="app-name">Sama</div>
+
+<!-- ══════════ SETUP SCREEN ══════════ -->
+<div class="screen" id="setupScreen">
+
+  <p class="setup-title">Begin your session</p>
+
+  <!-- Duration picker -->
+  <div class="duration-grid" id="durationGrid">
+    <button class="dur-btn" data-min="5">5<span class="unit">min</span></button>
+    <button class="dur-btn active" data-min="10">10<span class="unit">min</span></button>
+    <button class="dur-btn" data-min="15">15<span class="unit">min</span></button>
+    <button class="dur-btn" data-min="20">20<span class="unit">min</span></button>
+    <button class="dur-btn" data-min="30">30<span class="unit">min</span></button>
+    <button class="dur-btn" data-min="45">45<span class="unit">min</span></button>
+    <button class="dur-btn" data-min="60">60<span class="unit">min</span></button>
+    <button class="dur-btn" data-min="75">75<span class="unit">min</span></button>
+    <button class="dur-btn" data-min="90">90<span class="unit">min</span></button>
+    <button class="dur-btn" data-min="120">120<span class="unit">min</span></button>
+  </div>
+
+  <!-- Prep time -->
+  <div class="options-row">
+    <div>
+      <div class="opt-label">Preparation time</div>
+      <div class="opt-sub">Bell before session starts</div>
+    </div>
+    <div class="opt-right">
+      <div class="stepper">
+        <button class="step-btn" id="prepDown">−</button>
+        <span class="step-val" id="prepVal">1 min</span>
+        <button class="step-btn" id="prepUp">+</button>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="prepToggle" checked>
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+      </label>
+    </div>
+  </div>
+
+  <!-- Interval bells -->
+  <div class="options-row">
+    <div>
+      <div class="opt-label">Interval bells</div>
+      <div class="opt-sub">Reminder chime during session</div>
+    </div>
+    <div class="opt-right">
+      <div class="stepper">
+        <button class="step-btn" id="intDown">−</button>
+        <span class="step-val" id="intVal">Off</span>
+        <button class="step-btn" id="intUp">+</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bell selector -->
+  <div class="bell-selector-wrap">
+    <div class="bell-sel-label">Bell sound</div>
+    <div class="bell-selector" id="bellSelector">
+      <button class="bell-btn active" data-bell="tibetan">Tibetan Bowl</button>
+      <button class="bell-btn" data-bell="temple">Temple Bell</button>
+      <button class="bell-btn" data-bell="tingsha">Tingsha</button>
+      <button class="bell-btn" data-bell="crystal">Crystal Bowl</button>
+      <button class="bell-btn" data-bell="rin">Zen Rin</button>
+    </div>
+  </div>
+
+  <button class="begin-btn" id="beginBtn">Begin</button>
+
+
+</div>
+
+<!-- ══════════ SESSION SCREEN ══════════ -->
+<div class="screen hidden" id="sessionScreen">
+
+  <div class="ring-wrapper" id="ringWrapper">
+    <svg class="ring-svg" viewBox="0 0 320 320" id="ringSVG">
+      <!-- Outer ring (session) -->
+      <circle class="ring-track" cx="160" cy="160" r="140"/>
+      <circle class="ring-progress" cx="160" cy="160" r="140" id="ringProgress"/>
+      <!-- Inner ring (prep) -->
+      <circle class="ring-prep-track" cx="160" cy="160" r="118" id="prepTrack"/>
+      <circle class="ring-prep-progress" cx="160" cy="160" r="118" id="prepProgress"/>
+      <!-- Interval indicator (tiny innermost) -->
+      <circle class="ring-interval-progress" cx="160" cy="160" r="96" id="intProgress"/>
+    </svg>
+
+    <div class="ring-center" id="ringCenter">
+      <div class="time-display" id="timeDisplay">—</div>
+      <div class="time-label" id="timeLabel">remaining</div>
+      <div class="phase-label" id="phaseLabel"></div>
+    </div>
+  </div>
+
+  <div class="session-controls">
+    <button class="ctrl-btn" id="stopBtn">Stop</button>
+    <div class="ctrl-sep"></div>
+    <button class="ctrl-btn primary" id="pauseBtn">Pause</button>
+  </div>
+
+  <div class="session-meta" id="sessionMeta"></div>
+</div>
+
+<!-- ══════════ COMPLETE SCREEN ══════════ -->
+<div class="screen hidden" id="completeScreen">
+  <svg class="complete-circle" viewBox="0 0 120 120">
+    <circle cx="60" cy="60" r="55"/>
+  </svg>
+  <div class="complete-title">Well done.</div>
+  <div class="complete-duration" id="completeDuration"></div>
+  <div class="complete-actions">
+    <button class="complete-btn primary" id="againBtn">Meditate again</button>
+    <button class="complete-btn secondary" id="doneBtn">Done</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════
+   STATE
+═══════════════════════════ */
+const state = {
+  durationMin: 10,
+  prepSecs: 15,
+  prepEnabled: true,
+  intervalMin: 0,
+  showTime: true,  // always shown
+  phase: 'idle',   // idle | prep | session | done
+  totalSecs: 0,
+  secsLeft: 0,
+  paused: false,
+  timer: null,
+  sessionStarted: null,
+};
+
+/* ═══════════════════════════
+   AUDIO — 5 Bell Synthesizers
+═══════════════════════════ */
+let audioCtx = null;
+let selectedBell = 'tibetan';
+
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+async function ensureAudio() {
+  const ctx = getAudio();
+  if (ctx.state === 'suspended') await ctx.resume();
+  return ctx;
+}
+
+/* ── Shared helpers ── */
+function addPartial(ctx, master, freq, gain, decay, now, type = 'sine') {
+  const osc = ctx.createOscillator();
+  const env = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, now);
+  env.gain.setValueAtTime(0, now);
+  env.gain.linearRampToValueAtTime(gain, now + 0.01);
+  env.gain.exponentialRampToValueAtTime(0.0001, now + decay);
+  osc.connect(env); env.connect(master);
+  osc.start(now); osc.stop(now + decay + 0.05);
+}
+
+function addNoise(ctx, master, volume, cutoff, q, duration, now) {
+  const bufLen = Math.floor(ctx.sampleRate * duration);
+  const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/bufLen, 4);
+  const src = ctx.createBufferSource();
+  const filt = ctx.createBiquadFilter();
+  const env = ctx.createGain();
+  filt.type = 'bandpass'; filt.frequency.value = cutoff; filt.Q.value = q;
+  src.buffer = buf;
+  src.connect(filt); filt.connect(env); env.connect(master);
+  env.gain.setValueAtTime(volume, now);
+  env.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  src.start(now);
+}
+
+/* ════════════════════════════════════════
+   1. TIBETAN SINGING BOWL
+   Warm, deep, inharmonic bowl partials.
+   Ratios from real bowl acoustics: 1, 2.73, 5.25, 8.65
+════════════════════════════════════════ */
+async function bellTibetan(ctx, now, vol = 0.5) {
+  try {
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(1, now);
+    master.connect(ctx.destination);
+
+  const f0 = 196; // G3 — classic Tibetan bowl pitch
+  const partials = [
+    { f: f0,         g: vol*0.55, d: 8.0 },
+    { f: f0 * 2.73,  g: vol*0.30, d: 6.0 },
+    { f: f0 * 5.25,  g: vol*0.14, d: 4.0 },
+    { f: f0 * 8.65,  g: vol*0.06, d: 2.5 },
+  ];
+  partials.forEach(({f, g, d}) => {
+    addPartial(ctx, master, f,        g,     d, now);
+    addPartial(ctx, master, f * 1.002, g*0.4, d, now);
+  });
+  addNoise(ctx, master, vol*0.45, 180, 1.2, 0.09, now);
+  } catch(e) { console.warn('Tibetan bell error:', e); }
+}
+
+/* ════════════════════════════════════════
+   2. JAPANESE TEMPLE BELL (Bonshō 梵鐘)
+════════════════════════════════════════ */
+function bellTemple(ctx, now, vol = 0.5) {
+  try {
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(1, now);
+    master.connect(ctx.destination);
+
+  const f0 = 68; // Very deep — C2 range
+  const partials = [
+    { f: f0,         g: vol*0.60, d: 12.0 },
+    { f: f0 * 2.07,  g: vol*0.35, d: 9.0  },
+    { f: f0 * 3.01,  g: vol*0.20, d: 6.5  },
+    { f: f0 * 4.25,  g: vol*0.10, d: 4.5  },
+    { f: f0 * 5.87,  g: vol*0.05, d: 3.0  },
+  ];
+  partials.forEach(({f, g, d}) => addPartial(ctx, master, f, g, d, now));
+  addNoise(ctx, master, vol*0.7,  80,  0.7, 0.18, now);
+  addNoise(ctx, master, vol*0.3, 200,  1.0, 0.08, now);
+  addPartial(ctx, master, 38, vol*0.12, 5.0, now);
+  } catch(e) { console.warn('Temple bell error:', e); }
+}
+
+/* ════════════════════════════════════════
+   3. TINGSHA (Tibetan Prayer Cymbals)
+════════════════════════════════════════ */
+function bellTingsha(ctx, now, vol = 0.5) {
+  try {
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(1, now);
+    master.connect(ctx.destination);
+
+  const f0 = 900; // High bright cymbal
+  const partials = [
+    { f: f0,          g: vol*0.50, d: 4.0 },
+    { f: f0 * 2.76,   g: vol*0.28, d: 3.0 },
+    { f: f0 * 5.40,   g: vol*0.14, d: 2.0 },
+    { f: f0 * 8.93,   g: vol*0.07, d: 1.2 },
+    { f: f0 * 13.34,  g: vol*0.03, d: 0.7 },
+  ];
+  partials.forEach(({f, g, d}) => {
+    addPartial(ctx, master, f,         g,      d,   now);
+    addPartial(ctx, master, f * 1.003, g*0.35, d*0.8, now);
+  });
+  addNoise(ctx, master, vol*0.6, 2800, 3.0, 0.035, now);
+  addNoise(ctx, master, vol*0.3, 900,  2.0, 0.025, now);
+  } catch(e) { console.warn('Tingsha error:', e); }
+}
+
+/* ════════════════════════════════════════
+   4. CRYSTAL SINGING BOWL
+════════════════════════════════════════ */
+function bellCrystal(ctx, now, vol = 0.5) {
+  try {
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(1, now);
+    master.connect(ctx.destination);
+
+    const f0 = 432;
+    const pairs = [
+      { f: f0,       g: vol*0.55, d: 11.0 },
+      { f: f0*1.004, g: vol*0.50, d: 11.0 },
+      { f: f0*2.0,   g: vol*0.08, d: 7.0  },
+      { f: f0*2.004, g: vol*0.07, d: 7.0  },
+    ];
+    pairs.forEach(({f, g, d}) => {
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, now);
+      env.gain.setValueAtTime(0, now);
+      env.gain.linearRampToValueAtTime(g, now + 0.08);
+      env.gain.setValueAtTime(g, now + 0.3);
+      env.gain.exponentialRampToValueAtTime(0.0001, now + d);
+      osc.connect(env); env.connect(master);
+      osc.start(now); osc.stop(now + d + 0.1);
+    });
+    addNoise(ctx, master, vol*0.15, 1200, 4.0, 0.04, now);
+  } catch(e) { console.warn('Crystal bell error:', e); }
+}
+
+/* ════════════════════════════════════════
+   5. ZEN RIN BELL
+════════════════════════════════════════ */
+function bellRin(ctx, now, vol = 0.5) {
+  try {
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(1, now);
+    master.connect(ctx.destination);
+
+    const f0 = 480;
+    const partials = [
+      { f: f0,        g: vol*0.52, d: 6.5 },
+      { f: f0 * 2.65, g: vol*0.28, d: 4.5 },
+      { f: f0 * 4.98, g: vol*0.13, d: 3.0 },
+      { f: f0 * 8.12, g: vol*0.05, d: 1.8 },
+    ];
+    partials.forEach(({f, g, d}) => addPartial(ctx, master, f, g, d, now));
+    addNoise(ctx, master, vol*0.4, 500, 2.5, 0.05, now);
+    addNoise(ctx, master, vol*0.2, 1800, 3.0, 0.025, now);
+  } catch(e) { console.warn('Rin bell error:', e); }
+}
+
+/* ── Bell dispatcher — resumes context synchronously on user gesture ── */
+async function playBell(vol = 0.5) {
+  try {
+    const ctx = getAudio();
+    ctx.resume(); // synchronous trigger — must happen directly in click handler
+    await ctx.resume(); // wait for it to actually be running
+    const now = ctx.currentTime;
+    switch (selectedBell) {
+      case 'tibetan': bellTibetan(ctx, now, vol); break;
+      case 'temple':  bellTemple(ctx, now, vol);  break;
+      case 'tingsha': bellTingsha(ctx, now, vol); break;
+      case 'crystal': bellCrystal(ctx, now, vol); break;
+      case 'rin':     bellRin(ctx, now, vol);     break;
+      default:        bellTibetan(ctx, now, vol);
+    }
+  } catch(e) { console.warn('Bell error:', e); }
+}
+
+/* ═══════════════════════════
+   UI HELPERS
+═══════════════════════════ */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function fmtTime(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m + ':' + String(s).padStart(2,'0');
+}
+
+/* ═══════════════════════════
+   SETUP SCREEN LOGIC
+═══════════════════════════ */
+// Duration buttons
+document.getElementById('durationGrid').addEventListener('click', e => {
+  const btn = e.target.closest('.dur-btn');
+  if (!btn) return;
+  document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.durationMin = parseInt(btn.dataset.min);
+});
+
+// Prep stepper (values in seconds)
+const prepVals = [0, 15, 30, 60];
+let prepIdx = 1;
+document.getElementById('prepUp').addEventListener('click', () => {
+  if (prepIdx < prepVals.length - 1) prepIdx++;
+  updatePrepVal();
+});
+document.getElementById('prepDown').addEventListener('click', () => {
+  if (prepIdx > 0) prepIdx--;
+  updatePrepVal();
+});
+function prepLabel(secs) {
+  if (secs === 0) return 'Off';
+  if (secs < 60)  return secs + ' sec';
+  return (secs / 60) + ' min';
+}
+function updatePrepVal() {
+  const v = prepVals[prepIdx];
+  document.getElementById('prepVal').textContent = prepLabel(v);
+  state.prepSecs = v;
+  state.prepEnabled = document.getElementById('prepToggle').checked && v > 0;
+}
+document.getElementById('prepToggle').addEventListener('change', e => {
+  state.prepEnabled = e.target.checked && prepVals[prepIdx] > 0;
+});
+
+// Interval stepper
+const intVals = [0, 1, 5, 10, 15, 30];
+let intIdx = 0;
+document.getElementById('intUp').addEventListener('click', () => {
+  if (intIdx < intVals.length - 1) intIdx++;
+  updateIntVal();
+});
+document.getElementById('intDown').addEventListener('click', () => {
+  if (intIdx > 0) intIdx--;
+  updateIntVal();
+});
+function updateIntVal() {
+  const v = intVals[intIdx];
+  document.getElementById('intVal').textContent = v === 0 ? 'Off' : v + ' min';
+  state.intervalMin = v;
+}
+
+
+
+/* ═══════════════════════════
+   RING GEOMETRY
+═══════════════════════════ */
+const OUTER_R = 140; // matches SVG
+const INNER_R = 118;
+const INT_R   = 96;
+
+function circumference(r) { return 2 * Math.PI * r; }
+
+function setRingProgress(el, r, frac) {
+  const c = circumference(r);
+  el.style.strokeDasharray = c;
+  el.style.strokeDashoffset = c * (1 - frac);
+}
+
+function initRings() {
+  const rp = document.getElementById('ringProgress');
+  const pp = document.getElementById('prepProgress');
+  const ip = document.getElementById('intProgress');
+  const pt = document.getElementById('prepTrack');
+
+  setRingProgress(rp, OUTER_R, 1);
+  setRingProgress(pp, INNER_R, 0);
+  setRingProgress(ip, INT_R, 0);
+
+  // Show/hide inner rings
+  pt.style.display = 'none';
+  pp.style.display = 'none';
+  ip.style.display = 'none';
+}
+
+/* ═══════════════════════════
+   SESSION ENGINE
+═══════════════════════════ */
+async function beginSession() {
+  const ctx = getAudio();
+  ctx.resume();
+
+  state.prepEnabled = document.getElementById('prepToggle').checked && prepVals[prepIdx] > 0;
+  state.prepSecs = prepVals[prepIdx];
+  state.intervalMin = intVals[intIdx];
+
+  initRings();
+  showScreen('sessionScreen');
+
+  const meta = document.getElementById('sessionMeta');
+  meta.textContent = state.durationMin + ' min session';
+
+  if (state.prepEnabled && state.prepSecs > 0) {
+    startPrep();
+  } else {
+    playBell(0.75); // start bell — no prep, rings immediately
+    setTimeout(() => startMeditation(), 1000);
+  }
+}
+
+/* ── Prep phase ── */
+function startPrep() {
+  state.phase = 'prep';
+  state.totalSecs = state.prepSecs;
+  state.secsLeft = state.totalSecs;
+  state.paused = false;
+
+  const pp = document.getElementById('prepProgress');
+  const pt = document.getElementById('prepTrack');
+  pt.style.display = 'block';
+  pp.style.display = 'block';
+  setRingProgress(pp, INNER_R, 1);
+
+  document.getElementById('phaseLabel').textContent = 'Preparing';
+  document.getElementById('timeLabel').textContent = 'prepare';
+
+  tickPrep();
+}
+
+function tickPrep() {
+  updatePrepDisplay();
+  if (state.timer) clearTimeout(state.timer);
+  state.timer = setInterval(() => {
+    if (state.paused) return;
+    state.secsLeft--;
+    updatePrepDisplay();
+    if (state.secsLeft <= 0) {
+      clearInterval(state.timer);
+      document.getElementById('prepProgress').style.display = 'none';
+      document.getElementById('prepTrack').style.display = 'none';
+      playBell(0.75); // full bell — session now begins
+      setTimeout(() => startMeditation(), 1000);
+    }
+  }, 1000);
+}
+
+function updatePrepDisplay() {
+  const frac = state.secsLeft / state.totalSecs;
+  setRingProgress(document.getElementById('prepProgress'), INNER_R, frac);
+  if (state.showTime) {
+    document.getElementById('timeDisplay').textContent = fmtTime(state.secsLeft);
+  } else {
+    document.getElementById('timeDisplay').textContent = '·';
+  }
+}
+
+/* ── Meditation phase ── */
+let nextIntervalAt = 0;
+
+function startMeditation() {
+  state.phase = 'session';
+  state.totalSecs = state.durationMin * 60;
+  state.secsLeft = state.totalSecs;
+  state.paused = false;
+  state.sessionStarted = Date.now();
+
+  // Interval setup
+  if (state.intervalMin > 0) {
+    nextIntervalAt = state.secsLeft - state.intervalMin * 60;
+    const ip = document.getElementById('intProgress');
+    ip.style.display = 'block';
+    setRingProgress(ip, INT_R, 1);
+  }
+
+  document.getElementById('phaseLabel').textContent = '';
+  document.getElementById('timeLabel').textContent = 'remaining';
+
+  setRingProgress(document.getElementById('ringProgress'), OUTER_R, 1);
+
+  updateSessionDisplay();
+  if (state.timer) clearInterval(state.timer);
+  state.timer = setInterval(() => {
+    if (state.paused) return;
+    state.secsLeft--;
+
+    // Interval bell
+    if (state.intervalMin > 0 && state.secsLeft <= nextIntervalAt && nextIntervalAt > 0) {
+      playBell(0.45); // interval bell — softer nudge
+      nextIntervalAt -= state.intervalMin * 60;
+      // Flash interval ring
+      const ip = document.getElementById('intProgress');
+      setRingProgress(ip, INT_R, 1);
+    }
+
+    updateSessionDisplay();
+
+    if (state.secsLeft <= 0) {
+      clearInterval(state.timer);
+      endSession();
+    }
+  }, 1000);
+}
+
+function updateSessionDisplay() {
+  const frac = state.secsLeft / state.totalSecs;
+  setRingProgress(document.getElementById('ringProgress'), OUTER_R, frac);
+
+  const td = document.getElementById('timeDisplay');
+  const center = document.getElementById('ringCenter');
+
+  if (state.showTime) {
+    td.textContent = fmtTime(state.secsLeft);
+    center.classList.remove('peek-hidden');
+  } else {
+    td.textContent = '·';
+    document.getElementById('timeLabel').textContent = '';
+  }
+}
+
+function endSession() {
+  state.phase = 'done';
+  const isTingsha = selectedBell === 'tingsha';
+  // Strike 1 — moderate
+  playBell(0.5);
+  // Strike 2 — a bit fuller
+  setTimeout(() => playBell(0.65), 2800);
+  // Strike 3 — full and final (skipped for Tingsha — two strikes only)
+  if (!isTingsha) {
+    setTimeout(() => playBell(0.85), 5600);
+  }
+  // Show complete screen after the last strike has rung out
+  setTimeout(() => showComplete(), isTingsha ? 5000 : 8000);
+}
+
+/* ═══════════════════════════
+   COMPLETE SCREEN
+═══════════════════════════ */
+function showComplete() {
+  const mins = state.durationMin;
+  document.getElementById('completeDuration').textContent =
+    mins + ' minute' + (mins !== 1 ? 's' : '') + ' of mindfulness';
+  showScreen('completeScreen');
+}
+
+/* ═══════════════════════════
+   SESSION CONTROLS
+═══════════════════════════ */
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  state.paused = !state.paused;
+  document.getElementById('pauseBtn').textContent = state.paused ? 'Resume' : 'Pause';
+  document.getElementById('phaseLabel').textContent = state.paused ? 'Paused' : '';
+});
+
+document.getElementById('stopBtn').addEventListener('click', () => {
+  if (state.timer) clearInterval(state.timer);
+  state.phase = 'idle';
+  document.getElementById('pauseBtn').textContent = 'Pause';
+  showScreen('setupScreen');
+});
+
+/* ═══════════════════════════
+   INIT
+═══════════════════════════ */
+document.getElementById('beginBtn').addEventListener('click', beginSession);
+
+
+// Bell selector — preview on tap
+document.getElementById('bellSelector').addEventListener('click', e => {
+  const btn = e.target.closest('.bell-btn');
+  if (!btn) return;
+  document.querySelectorAll('.bell-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedBell = btn.dataset.bell;
+  playBell(0.5);
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  if (state.timer) clearInterval(state.timer);
+  document.getElementById('pauseBtn').textContent = 'Pause';
+  showScreen('setupScreen');
+});
+document.getElementById('doneBtn').addEventListener('click', () => {
+  if (state.timer) clearInterval(state.timer);
+  document.getElementById('pauseBtn').textContent = 'Pause';
+  showScreen('setupScreen');
+});
+
+
+
+/* ═══════════════════════════
+   INIT
+═══════════════════════════ */
+initRings();
+</script>
+</body>
+</html>
